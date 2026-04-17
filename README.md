@@ -14,11 +14,11 @@ This repository starts from a simple geometric observation and turns it into a f
 
 For a latent grid `z_{n,k}`, CFP encourages:
 
-`Δ_i Δ_j z ≈ 0`
+`Delta_i Delta_j z ~= 0`
 
 which is the discrete statement that factor steps approximately commute. In the exact case, this implies an additive decomposition:
 
-`z_n = c + Σ_i g_i(n_i)`
+`z_n = c + sum_i g_i(n_i)`
 
 The repository does **not** assume this replaces dense layers or standard optimizers. The practical claim is narrower:
 
@@ -28,22 +28,27 @@ The repository does **not** assume this replaces dense layers or standard optimi
 
 ## Origin Sketch
 
-The project started from a simple repeated-point construction:
+The project started from a simple repeated-point construction rendered directly from code:
 
-![Triplet construction](Triple.jpeg)
+![Triplet construction](docs/figures/triplet_construction.png)
 
-![Diagonal subsequence pattern](subsequence.jpeg)
+![Diagonal subsequence pattern](docs/figures/diagonal_subsequence.png)
 
 ## What Is Implemented
 
 - `docs/research_note.md`: condensed statement of the hypothesis, claims, and evaluation rules.
-- `src/structured_latent_hypothesis/synthetic.py`: first synthetic benchmark and CFP regularizers.
-- `scripts/run_synthetic.py`: runs baseline, smoothness control, CFP-only, and CFP-plus-step variants.
+- `src/structured_latent_hypothesis/synthetic.py`: synthetic benchmarks and CFP regularizers.
+- `scripts/run_synthetic.py`: initial baseline benchmark.
+- `scripts/run_cfp_sweep.py`: lambda sweep with holdout-cell diagnostics.
+- `scripts/run_commutator_ladder.py`: matched-family ladders with ground-truth commutator metadata.
+- `scripts/render_origin_figures.py`: reproducible origin figures for the repository.
 
-The first benchmark contains two worlds:
+The current benchmark families include:
 
 - `commutative`: horizontal translation + brightness scaling
 - `noncommutative`: asymmetric spatial windowing + rotation
+- `matched ramp ladder`: horizontal shift + position-dependent intensity ramp
+- `matched scale ladder`: horizontal shift + center scaling
 
 ## Quick Start
 
@@ -51,6 +56,7 @@ The first benchmark contains two worlds:
 python -m venv .venv
 .venv\Scripts\python -m pip install --upgrade pip
 .venv\Scripts\python -m pip install -e .
+.venv\Scripts\python .\scripts\render_origin_figures.py
 .venv\Scripts\python .\scripts\run_synthetic.py --output-json .\results\initial_synthetic.json --output-markdown .\results\initial_synthetic.md
 ```
 
@@ -58,9 +64,9 @@ python -m venv .venv
 
 The claim is supported only if CFP:
 
-- improves held-out composition performance in the commutative world,
+- improves held-out composition performance in commutative or near-commutative worlds,
 - reduces commutativity error,
 - remains stable across several seeds,
-- does not show the same gain on the non-commutative control.
+- loses the advantage as true non-commutativity grows.
 
 If the prior helps both worlds equally, it is probably acting as generic smoothing rather than as a structure-aware bias.
