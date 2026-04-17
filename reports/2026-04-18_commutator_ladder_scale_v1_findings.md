@@ -1,5 +1,7 @@
 # Commutator Ladder Scale V1 Findings - 2026-04-18
 
+> Superseded by the matched-family benchmark audit on 2026-04-18. Use `commutator_ladder_scale_v2` for any current evidence claims.
+
 ## Setup
 
 - Benchmark family: `matched_scale_alpha`
