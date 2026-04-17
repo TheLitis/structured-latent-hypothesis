@@ -57,13 +57,28 @@ def build_base_pattern(size: int) -> torch.Tensor:
     return (img / img.max()).clamp(0.0, 1.0)
 
 
+def horizontal_ramp(size: int) -> torch.Tensor:
+    coords = torch.linspace(-1.0, 1.0, size)
+    return coords.unsqueeze(0).repeat(size, 1)
+
+
+def apply_shift(image: torch.Tensor, shift: int) -> torch.Tensor:
+    return torch.roll(image, shifts=(int(shift),), dims=(1,))
+
+
+def apply_modulation(image: torch.Tensor, scale: float, noncomm_strength: float) -> torch.Tensor:
+    ramp = horizontal_ramp(image.shape[-1])
+    modulator = float(scale) * (1.0 + float(noncomm_strength) * ramp)
+    return (image * modulator).clamp(0.0, 1.0)
+
+
 def shift_brightness_world(base: torch.Tensor, grid_size: int) -> torch.Tensor:
     shifts = torch.round(torch.linspace(-3.0, 3.0, grid_size)).to(torch.int64)
     brightness = torch.linspace(0.55, 1.45, grid_size)
     world = []
     for shift in shifts.tolist():
         row = []
-        shifted = torch.roll(base, shifts=(int(shift),), dims=(1,))
+        shifted = apply_shift(base, int(shift))
         for scale in brightness.tolist():
             row.append((shifted * float(scale)).clamp(0.0, 1.0))
         world.append(torch.stack(row))
@@ -115,13 +130,53 @@ def window_rotation_world(base: torch.Tensor, grid_size: int) -> torch.Tensor:
     return torch.stack(world)
 
 
+def matched_shift_modulation_world(base: torch.Tensor, grid_size: int, noncomm_strength: float) -> torch.Tensor:
+    shifts = torch.round(torch.linspace(-3.0, 3.0, grid_size)).to(torch.int64)
+    scales = torch.linspace(0.65, 1.35, grid_size)
+    world = []
+    for shift in shifts.tolist():
+        row = []
+        shifted = apply_shift(base, int(shift))
+        for scale in scales.tolist():
+            row.append(apply_modulation(shifted, float(scale), noncomm_strength))
+        world.append(torch.stack(row))
+    return torch.stack(world)
+
+
+def parse_matched_comm_world(world: str) -> float | None:
+    prefix = "matched_comm_"
+    if world.startswith(prefix):
+        return float(world[len(prefix) :])
+    return None
+
+
 def generate_world(world: str, grid_size: int, image_size: int) -> torch.Tensor:
     base = build_base_pattern(image_size)
+    matched_strength = parse_matched_comm_world(world)
+    if matched_strength is not None:
+        return matched_shift_modulation_world(base, grid_size, matched_strength)
     if world == "commutative":
         return shift_brightness_world(base, grid_size)
     if world == "noncommutative":
         return window_rotation_world(base, grid_size)
     raise ValueError(f"Unsupported world: {world}")
+
+
+def ground_truth_commutator_magnitude(world: str, grid_size: int, image_size: int) -> float | None:
+    matched_strength = parse_matched_comm_world(world)
+    if matched_strength is None:
+        return None
+
+    base = build_base_pattern(image_size)
+    shifts = torch.round(torch.linspace(-3.0, 3.0, grid_size)).to(torch.int64)
+    scales = torch.linspace(0.65, 1.35, grid_size)
+    diffs = []
+    for shift in shifts.tolist():
+        for scale in scales.tolist():
+            ab = apply_modulation(apply_shift(base, int(shift)), float(scale), matched_strength)
+            ba = apply_shift(apply_modulation(base, float(scale), matched_strength), int(shift))
+            diffs.append(float((ab - ba).pow(2).mean().item()))
+    return mean(diffs)
 
 
 def cartesian_block_train_mask(grid_size: int) -> torch.Tensor:
@@ -444,6 +499,10 @@ def run_benchmark_suite(
         "variants": variants,
         "variant_recipes": recipes,
         "split_strategy": split_strategy,
+        "world_metadata": {
+            world: {"ground_truth_commutator": ground_truth_commutator_magnitude(world, grid_size, image_size)}
+            for world in worlds
+        },
         "summary": summary,
         "runs": raw_runs,
     }

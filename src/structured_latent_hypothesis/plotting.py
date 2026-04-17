@@ -182,3 +182,31 @@ def plot_train_vs_holdout_comm(results: dict[str, Any], output_path: str | Path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     figure.savefig(output_path, dpi=180, bbox_inches="tight")
     plt.close(figure)
+
+
+def plot_gain_vs_commutator(results: dict[str, Any], output_path: str | Path) -> None:
+    worlds = results["worlds"]
+    variants = [variant for variant in results["variants"] if variant != "baseline"]
+
+    x_values = [results["world_metadata"][world]["ground_truth_commutator"] for world in worlds]
+    figure, axis = plt.subplots(1, 1, figsize=(7, 4.5))
+
+    for variant in variants:
+        gains = []
+        for world in worlds:
+            baseline = metric_mean(results, world, "baseline", "test_recon_mse")
+            variant_value = metric_mean(results, world, variant, "test_recon_mse")
+            gains.append(baseline - variant_value)
+        axis.plot(x_values, gains, marker="o", linewidth=2.0, label=variant)
+
+    axis.axhline(0.0, color="#444444", linestyle="--", linewidth=1.2)
+    axis.set_xlabel("ground-truth commutator magnitude")
+    axis.set_ylabel("baseline - variant test recon mse")
+    axis.set_title("CFP gain vs ground-truth commutator magnitude")
+    axis.grid(alpha=0.25)
+    axis.legend()
+    figure.tight_layout()
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    figure.savefig(output_path, dpi=180, bbox_inches="tight")
+    plt.close(figure)
