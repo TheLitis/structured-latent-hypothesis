@@ -16,15 +16,23 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--hidden-dim", type=int, default=96)
     parser.add_argument("--epochs", type=int, default=320)
     parser.add_argument("--seeds", type=int, nargs="+", default=[3, 11, 29])
-    parser.add_argument("--family", choices=["ramp", "scale"], default="ramp")
+    parser.add_argument("--family", choices=["ramp", "scale", "rotation"], default="ramp")
     parser.add_argument("--worlds", nargs="+", default=None)
     parser.add_argument("--split-strategy", default="cartesian_blocks")
     return parser.parse_args()
 
 
 def default_worlds(family: str) -> list[str]:
-    prefix = "matched_comm" if family == "ramp" else "matched_scale"
-    return [f"{prefix}_{value:0.2f}" for value in (0.00, 0.10, 0.20, 0.35, 0.50)]
+    if family == "ramp":
+        prefix = "matched_comm"
+        values = (0.00, 0.10, 0.20, 0.35, 0.50)
+    elif family == "scale":
+        prefix = "matched_scale"
+        values = (0.00, 0.10, 0.20, 0.35, 0.50)
+    else:
+        prefix = "matched_rotate"
+        values = (0.00, 5.00, 10.00, 20.00, 30.00)
+    return [f"{prefix}_{value:0.2f}" for value in values]
 
 
 def main() -> None:

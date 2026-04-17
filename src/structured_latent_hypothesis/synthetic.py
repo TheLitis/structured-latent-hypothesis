@@ -153,7 +153,7 @@ def window_rotation_world(base: torch.Tensor, grid_size: int) -> torch.Tensor:
 
 def matched_shift_modulation_world(base: torch.Tensor, grid_size: int, noncomm_strength: float) -> torch.Tensor:
     shifts = torch.round(torch.linspace(-3.0, 3.0, grid_size)).to(torch.int64)
-    scales = torch.linspace(0.65, 1.35, grid_size)
+    _, scales = matched_column_coordinates(grid_size)
     world = []
     for shift in shifts.tolist():
         row = []
@@ -164,16 +164,56 @@ def matched_shift_modulation_world(base: torch.Tensor, grid_size: int, noncomm_s
     return torch.stack(world)
 
 
+def matched_column_coordinates(grid_size: int) -> tuple[torch.Tensor, torch.Tensor]:
+    phases = torch.linspace(-1.0, 1.0, grid_size)
+    brightness = torch.linspace(0.55, 1.45, grid_size)
+    return phases, brightness
+
+
+def apply_scale_brightness_operator(
+    image: torch.Tensor,
+    brightness: float,
+    phase: float,
+    noncomm_strength: float,
+) -> torch.Tensor:
+    delta = float(noncomm_strength) * float(phase)
+    transformed = image if abs(delta) < 1e-9 else apply_center_scale(image, delta)
+    return (transformed * float(brightness)).clamp(0.0, 1.0)
+
+
+def apply_rotation_brightness_operator(
+    image: torch.Tensor,
+    brightness: float,
+    phase: float,
+    max_degrees: float,
+) -> torch.Tensor:
+    angle = float(max_degrees) * float(phase)
+    transformed = image if abs(angle) < 1e-9 else rotate_image(image, angle)
+    return (transformed * float(brightness)).clamp(0.0, 1.0)
+
+
 def matched_shift_scale_world(base: torch.Tensor, grid_size: int, noncomm_strength: float) -> torch.Tensor:
     shifts = torch.round(torch.linspace(-3.0, 3.0, grid_size)).to(torch.int64)
-    brightness = torch.linspace(0.65, 1.35, grid_size)
+    phases, brightness = matched_column_coordinates(grid_size)
     world = []
-    scaled = apply_center_scale(base, noncomm_strength)
     for shift in shifts.tolist():
         row = []
-        shifted = apply_shift(scaled, int(shift))
-        for scale in brightness.tolist():
-            row.append((shifted * float(scale)).clamp(0.0, 1.0))
+        shifted = apply_shift(base, int(shift))
+        for phase, scale in zip(phases.tolist(), brightness.tolist()):
+            row.append(apply_scale_brightness_operator(shifted, float(scale), float(phase), noncomm_strength))
+        world.append(torch.stack(row))
+    return torch.stack(world)
+
+
+def matched_shift_rotation_world(base: torch.Tensor, grid_size: int, noncomm_strength: float) -> torch.Tensor:
+    shifts = torch.round(torch.linspace(-3.0, 3.0, grid_size)).to(torch.int64)
+    phases, brightness = matched_column_coordinates(grid_size)
+    world = []
+    for shift in shifts.tolist():
+        row = []
+        shifted = apply_shift(base, int(shift))
+        for phase, scale in zip(phases.tolist(), brightness.tolist()):
+            row.append(apply_rotation_brightness_operator(shifted, float(scale), float(phase), noncomm_strength))
         world.append(torch.stack(row))
     return torch.stack(world)
 
@@ -183,6 +223,7 @@ def parse_matched_world(world: str) -> tuple[str, float] | None:
         "matched_comm_": "ramp",
         "matched_ramp_": "ramp",
         "matched_scale_": "scale",
+        "matched_rotate_": "rotation",
     }
     for prefix, family in prefixes.items():
         if world.startswith(prefix):
@@ -199,6 +240,8 @@ def generate_world(world: str, grid_size: int, image_size: int) -> torch.Tensor:
             return matched_shift_modulation_world(base, grid_size, matched_strength)
         if family == "scale":
             return matched_shift_scale_world(base, grid_size, matched_strength)
+        if family == "rotation":
+            return matched_shift_rotation_world(base, grid_size, matched_strength)
     if world == "commutative":
         return shift_brightness_world(base, grid_size)
     if world == "noncommutative":
@@ -216,15 +259,42 @@ def ground_truth_commutator_magnitude(world: str, grid_size: int, image_size: in
     shifts = torch.round(torch.linspace(-3.0, 3.0, grid_size)).to(torch.int64)
     diffs = []
     if family == "ramp":
-        scales = torch.linspace(0.65, 1.35, grid_size)
+        _, scales = matched_column_coordinates(grid_size)
         for shift in shifts.tolist():
             for scale in scales.tolist():
                 ab = apply_modulation(apply_shift(base, int(shift)), float(scale), matched_strength)
                 ba = apply_shift(apply_modulation(base, float(scale), matched_strength), int(shift))
                 diffs.append(float((ab - ba).pow(2).mean().item()))
     elif family == "scale":
-        shift_rms = math.sqrt(mean([float(shift) ** 2 for shift in shifts.tolist()]))
-        return abs(float(matched_strength)) * shift_rms
+        phases, brightness = matched_column_coordinates(grid_size)
+        for shift in shifts.tolist():
+            for phase, scale in zip(phases.tolist(), brightness.tolist()):
+                ab = apply_scale_brightness_operator(
+                    apply_shift(base, int(shift)),
+                    float(scale),
+                    float(phase),
+                    matched_strength,
+                )
+                ba = apply_shift(
+                    apply_scale_brightness_operator(base, float(scale), float(phase), matched_strength),
+                    int(shift),
+                )
+                diffs.append(float((ab - ba).pow(2).mean().item()))
+    elif family == "rotation":
+        phases, brightness = matched_column_coordinates(grid_size)
+        for shift in shifts.tolist():
+            for phase, scale in zip(phases.tolist(), brightness.tolist()):
+                ab = apply_rotation_brightness_operator(
+                    apply_shift(base, int(shift)),
+                    float(scale),
+                    float(phase),
+                    matched_strength,
+                )
+                ba = apply_shift(
+                    apply_rotation_brightness_operator(base, float(scale), float(phase), matched_strength),
+                    int(shift),
+                )
+                diffs.append(float((ab - ba).pow(2).mean().item()))
     return mean(diffs)
 
 
