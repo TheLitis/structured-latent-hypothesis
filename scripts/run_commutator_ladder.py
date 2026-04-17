@@ -16,19 +16,22 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--hidden-dim", type=int, default=96)
     parser.add_argument("--epochs", type=int, default=320)
     parser.add_argument("--seeds", type=int, nargs="+", default=[3, 11, 29])
-    parser.add_argument(
-        "--worlds",
-        nargs="+",
-        default=["matched_comm_0.00", "matched_comm_0.10", "matched_comm_0.20", "matched_comm_0.35", "matched_comm_0.50"],
-    )
+    parser.add_argument("--family", choices=["ramp", "scale"], default="ramp")
+    parser.add_argument("--worlds", nargs="+", default=None)
     parser.add_argument("--split-strategy", default="cartesian_blocks")
     return parser.parse_args()
+
+
+def default_worlds(family: str) -> list[str]:
+    prefix = "matched_comm" if family == "ramp" else "matched_scale"
+    return [f"{prefix}_{value:0.2f}" for value in (0.00, 0.10, 0.20, 0.35, 0.50)]
 
 
 def main() -> None:
     args = parse_args()
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
+    worlds = args.worlds or default_worlds(args.family)
 
     variant_recipes = {
         "baseline": {},
@@ -41,7 +44,7 @@ def main() -> None:
     summary_path = output_dir / "summary.md"
     run_benchmark_suite(
         seeds=args.seeds,
-        worlds=args.worlds,
+        worlds=worlds,
         variants=variants,
         variant_recipes=variant_recipes,
         output_json=str(results_path),
@@ -70,7 +73,7 @@ def main() -> None:
         )
 
     report_lines = [
-        "# Matched Commutator Ladder V1",
+        f"# Matched Commutator Ladder V1 ({args.family})",
         "",
         f"Split strategy: `{results['split_strategy']}`",
         "",

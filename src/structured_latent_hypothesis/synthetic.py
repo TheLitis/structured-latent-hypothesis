@@ -72,6 +72,27 @@ def apply_modulation(image: torch.Tensor, scale: float, noncomm_strength: float)
     return (image * modulator).clamp(0.0, 1.0)
 
 
+def apply_center_scale(image: torch.Tensor, noncomm_strength: float) -> torch.Tensor:
+    scale_factor = 1.0 + float(noncomm_strength)
+    theta = torch.tensor(
+        [
+            [scale_factor, 0.0, 0.0],
+            [0.0, scale_factor, 0.0],
+        ],
+        dtype=image.dtype,
+    )
+    sample = image.unsqueeze(0).unsqueeze(0)
+    grid = nn.functional.affine_grid(theta.unsqueeze(0), sample.size(), align_corners=False)
+    scaled = nn.functional.grid_sample(
+        sample,
+        grid,
+        mode="bilinear",
+        padding_mode="zeros",
+        align_corners=False,
+    )
+    return scaled.squeeze(0).squeeze(0).clamp(0.0, 1.0)
+
+
 def shift_brightness_world(base: torch.Tensor, grid_size: int) -> torch.Tensor:
     shifts = torch.round(torch.linspace(-3.0, 3.0, grid_size)).to(torch.int64)
     brightness = torch.linspace(0.55, 1.45, grid_size)
@@ -143,18 +164,41 @@ def matched_shift_modulation_world(base: torch.Tensor, grid_size: int, noncomm_s
     return torch.stack(world)
 
 
-def parse_matched_comm_world(world: str) -> float | None:
-    prefix = "matched_comm_"
-    if world.startswith(prefix):
-        return float(world[len(prefix) :])
+def matched_shift_scale_world(base: torch.Tensor, grid_size: int, noncomm_strength: float) -> torch.Tensor:
+    shifts = torch.round(torch.linspace(-3.0, 3.0, grid_size)).to(torch.int64)
+    brightness = torch.linspace(0.65, 1.35, grid_size)
+    world = []
+    scaled = apply_center_scale(base, noncomm_strength)
+    for shift in shifts.tolist():
+        row = []
+        shifted = apply_shift(scaled, int(shift))
+        for scale in brightness.tolist():
+            row.append((shifted * float(scale)).clamp(0.0, 1.0))
+        world.append(torch.stack(row))
+    return torch.stack(world)
+
+
+def parse_matched_world(world: str) -> tuple[str, float] | None:
+    prefixes = {
+        "matched_comm_": "ramp",
+        "matched_ramp_": "ramp",
+        "matched_scale_": "scale",
+    }
+    for prefix, family in prefixes.items():
+        if world.startswith(prefix):
+            return family, float(world[len(prefix) :])
     return None
 
 
 def generate_world(world: str, grid_size: int, image_size: int) -> torch.Tensor:
     base = build_base_pattern(image_size)
-    matched_strength = parse_matched_comm_world(world)
-    if matched_strength is not None:
-        return matched_shift_modulation_world(base, grid_size, matched_strength)
+    matched_world = parse_matched_world(world)
+    if matched_world is not None:
+        family, matched_strength = matched_world
+        if family == "ramp":
+            return matched_shift_modulation_world(base, grid_size, matched_strength)
+        if family == "scale":
+            return matched_shift_scale_world(base, grid_size, matched_strength)
     if world == "commutative":
         return shift_brightness_world(base, grid_size)
     if world == "noncommutative":
@@ -163,19 +207,24 @@ def generate_world(world: str, grid_size: int, image_size: int) -> torch.Tensor:
 
 
 def ground_truth_commutator_magnitude(world: str, grid_size: int, image_size: int) -> float | None:
-    matched_strength = parse_matched_comm_world(world)
-    if matched_strength is None:
+    matched_world = parse_matched_world(world)
+    if matched_world is None:
         return None
 
+    family, matched_strength = matched_world
     base = build_base_pattern(image_size)
     shifts = torch.round(torch.linspace(-3.0, 3.0, grid_size)).to(torch.int64)
-    scales = torch.linspace(0.65, 1.35, grid_size)
     diffs = []
-    for shift in shifts.tolist():
-        for scale in scales.tolist():
-            ab = apply_modulation(apply_shift(base, int(shift)), float(scale), matched_strength)
-            ba = apply_shift(apply_modulation(base, float(scale), matched_strength), int(shift))
-            diffs.append(float((ab - ba).pow(2).mean().item()))
+    if family == "ramp":
+        scales = torch.linspace(0.65, 1.35, grid_size)
+        for shift in shifts.tolist():
+            for scale in scales.tolist():
+                ab = apply_modulation(apply_shift(base, int(shift)), float(scale), matched_strength)
+                ba = apply_shift(apply_modulation(base, float(scale), matched_strength), int(shift))
+                diffs.append(float((ab - ba).pow(2).mean().item()))
+    elif family == "scale":
+        shift_rms = math.sqrt(mean([float(shift) ** 2 for shift in shifts.tolist()]))
+        return abs(float(matched_strength)) * shift_rms
     return mean(diffs)
 
 
