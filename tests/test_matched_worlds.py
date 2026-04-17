@@ -2,7 +2,7 @@ import unittest
 
 import torch
 
-from structured_latent_hypothesis.synthetic import generate_world, ground_truth_commutator_magnitude
+from structured_latent_hypothesis.synthetic import generate_world, ground_truth_commutator_magnitude, ground_truth_step_drift_magnitude
 
 
 class MatchedWorldTest(unittest.TestCase):
@@ -19,6 +19,11 @@ class MatchedWorldTest(unittest.TestCase):
     def test_rotation_world_zero_strength_matches_commutative_world(self) -> None:
         reference = generate_world("commutative", 8, 20)
         candidate = generate_world("matched_rotate_0.00", 8, 20)
+        self.assertTrue(torch.allclose(reference, candidate))
+
+    def test_step_curve_gamma_one_matches_commutative_world(self) -> None:
+        reference = generate_world("commutative", 8, 20)
+        candidate = generate_world("stepcurve_1.00", 8, 20)
         self.assertTrue(torch.allclose(reference, candidate))
 
     def test_ramp_commutator_magnitude_increases_with_strength(self) -> None:
@@ -50,6 +55,12 @@ class MatchedWorldTest(unittest.TestCase):
         self.assertIsNotNone(values[0])
         self.assertLess(values[0], values[1])
         self.assertLess(values[1], values[2])
+
+    def test_step_curve_has_zero_commutator_but_positive_step_drift(self) -> None:
+        self.assertEqual(ground_truth_commutator_magnitude("stepcurve_1.00", 8, 20), 0.0)
+        self.assertEqual(ground_truth_commutator_magnitude("stepcurve_2.00", 8, 20), 0.0)
+        self.assertLess(float(ground_truth_step_drift_magnitude("stepcurve_1.00", 8)), 1e-12)
+        self.assertGreater(float(ground_truth_step_drift_magnitude("stepcurve_2.00", 8)), 0.0)
 
 
 if __name__ == "__main__":

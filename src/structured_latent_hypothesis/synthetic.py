@@ -96,7 +96,26 @@ def apply_center_scale(image: torch.Tensor, noncomm_strength: float) -> torch.Te
 
 def shift_brightness_world(base: torch.Tensor, grid_size: int) -> torch.Tensor:
     shifts = torch.round(torch.linspace(-3.0, 3.0, grid_size)).to(torch.int64)
-    brightness = torch.linspace(0.55, 1.45, grid_size)
+    brightness = brightness_curve(grid_size, gamma=1.0)
+    world = []
+    for shift in shifts.tolist():
+        row = []
+        shifted = apply_shift(base, int(shift))
+        for scale in brightness.tolist():
+            row.append((shifted * float(scale)).clamp(0.0, 1.0))
+        world.append(torch.stack(row))
+    return torch.stack(world)
+
+
+def brightness_curve(grid_size: int, gamma: float) -> torch.Tensor:
+    phases = torch.linspace(-1.0, 1.0, grid_size)
+    signed_power = torch.sign(phases) * torch.abs(phases).pow(float(gamma))
+    return 1.0 + 0.45 * signed_power
+
+
+def shift_brightness_curve_world(base: torch.Tensor, grid_size: int, gamma: float) -> torch.Tensor:
+    shifts = torch.round(torch.linspace(-3.0, 3.0, grid_size)).to(torch.int64)
+    brightness = brightness_curve(grid_size, gamma=gamma)
     world = []
     for shift in shifts.tolist():
         row = []
@@ -232,6 +251,13 @@ def parse_matched_world(world: str) -> tuple[str, float] | None:
     return None
 
 
+def parse_step_curve_world(world: str) -> float | None:
+    prefix = "stepcurve_"
+    if world.startswith(prefix):
+        return float(world[len(prefix) :])
+    return None
+
+
 def generate_world(world: str, grid_size: int, image_size: int) -> torch.Tensor:
     base = build_base_pattern(image_size)
     matched_world = parse_matched_world(world)
@@ -243,6 +269,9 @@ def generate_world(world: str, grid_size: int, image_size: int) -> torch.Tensor:
             return matched_shift_scale_world(base, grid_size, matched_strength)
         if family == "rotation":
             return matched_shift_rotation_world(base, grid_size, matched_strength)
+    step_curve = parse_step_curve_world(world)
+    if step_curve is not None:
+        return shift_brightness_curve_world(base, grid_size, gamma=step_curve)
     if world == "commutative":
         return shift_brightness_world(base, grid_size)
     if world == "noncommutative":
@@ -253,6 +282,8 @@ def generate_world(world: str, grid_size: int, image_size: int) -> torch.Tensor:
 def ground_truth_commutator_magnitude(world: str, grid_size: int, image_size: int) -> float | None:
     matched_world = parse_matched_world(world)
     if matched_world is None:
+        if parse_step_curve_world(world) is not None:
+            return 0.0
         return None
 
     family, matched_strength = matched_world
@@ -297,6 +328,15 @@ def ground_truth_commutator_magnitude(world: str, grid_size: int, image_size: in
                 )
                 diffs.append(float((ab - ba).pow(2).mean().item()))
     return mean(diffs)
+
+
+def ground_truth_step_drift_magnitude(world: str, grid_size: int) -> float | None:
+    gamma = parse_step_curve_world(world)
+    if gamma is None:
+        return None
+    brightness = brightness_curve(grid_size, gamma=gamma)
+    diffs = brightness[1:] - brightness[:-1]
+    return float((diffs - diffs.mean()).pow(2).mean().item())
 
 
 def cartesian_block_train_mask(grid_size: int, row_phase: int = 0, col_phase: int = 0) -> torch.Tensor:
@@ -726,7 +766,10 @@ def run_benchmark_suite(
         "variant_recipes": recipes,
         "split_strategy": split_strategy,
         "world_metadata": {
-            world: {"ground_truth_commutator": ground_truth_commutator_magnitude(world, grid_size, image_size)}
+            world: {
+                "ground_truth_commutator": ground_truth_commutator_magnitude(world, grid_size, image_size),
+                "ground_truth_step_drift": ground_truth_step_drift_magnitude(world, grid_size),
+            }
             for world in worlds
         },
         "summary": summary,
