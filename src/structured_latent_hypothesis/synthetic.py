@@ -17,6 +17,7 @@ class BenchmarkConfig:
     world: str
     variant: str
     seed: int
+    split_strategy: str = "random"
     grid_size: int = 8
     image_size: int = 20
     latent_dim: int = 8
@@ -123,7 +124,20 @@ def generate_world(world: str, grid_size: int, image_size: int) -> torch.Tensor:
     raise ValueError(f"Unsupported world: {world}")
 
 
-def sample_train_mask(grid_size: int, train_fraction: float, seed: int) -> torch.Tensor:
+def cartesian_block_train_mask(grid_size: int) -> torch.Tensor:
+    if grid_size < 6:
+        raise ValueError("cartesian_blocks split requires grid_size >= 6.")
+
+    mask = torch.ones((grid_size, grid_size), dtype=torch.bool)
+    holdout_rows = [index for index in range(grid_size) if index % 4 in (1, 2)]
+    holdout_cols = [index for index in range(grid_size) if index % 4 in (1, 2)]
+    for row in holdout_rows:
+        for col in holdout_cols:
+            mask[row, col] = False
+    return mask
+
+
+def sample_random_train_mask(grid_size: int, train_fraction: float, seed: int) -> torch.Tensor:
     generator = torch.Generator().manual_seed(seed + 1234)
     total = grid_size * grid_size
     for _ in range(512):
@@ -135,6 +149,14 @@ def sample_train_mask(grid_size: int, train_fraction: float, seed: int) -> torch
             if cells.sum().item() >= max(4, int(0.28 * (grid_size - 1) ** 2)):
                 return mask
     raise RuntimeError("Failed to sample a usable train/test split.")
+
+
+def sample_train_mask(grid_size: int, train_fraction: float, seed: int, split_strategy: str) -> torch.Tensor:
+    if split_strategy == "random":
+        return sample_random_train_mask(grid_size, train_fraction, seed)
+    if split_strategy == "cartesian_blocks":
+        return cartesian_block_train_mask(grid_size)
+    raise ValueError(f"Unsupported split strategy: {split_strategy}")
 
 
 class AutoEncoder(nn.Module):
@@ -237,7 +259,7 @@ def mse(pred: torch.Tensor, target: torch.Tensor) -> float:
 def train_one(config: BenchmarkConfig) -> dict[str, Any]:
     set_seed(config.seed)
     images = generate_world(config.world, config.grid_size, config.image_size)
-    mask = sample_train_mask(config.grid_size, config.train_fraction, config.seed)
+    mask = sample_train_mask(config.grid_size, config.train_fraction, config.seed, config.split_strategy)
 
     flat = images.reshape(config.grid_size * config.grid_size, -1)
     train_idx = mask.reshape(-1)
@@ -247,6 +269,7 @@ def train_one(config: BenchmarkConfig) -> dict[str, Any]:
     optimizer = torch.optim.Adam(model.parameters(), lr=config.lr)
 
     train_cell_mask = cell_mask(mask)
+    holdout_cell_mask = cell_mask(~mask)
 
     last_losses: dict[str, float] = {}
     for epoch in range(config.epochs):
@@ -293,9 +316,13 @@ def train_one(config: BenchmarkConfig) -> dict[str, Any]:
             "test_points": int(test_idx.sum().item()),
             "train_recon_mse": mse(recon_all[train_idx], flat[train_idx]),
             "test_recon_mse": mse(recon_all[test_idx], flat[test_idx]),
+            "generalization_gap": mse(recon_all[test_idx], flat[test_idx]) - mse(recon_all[train_idx], flat[train_idx]),
             "comm_error_all": float(mixed_difference_loss(z_grid, full_cell_mask).item()),
             "comm_error_train_cells": float(mixed_difference_loss(z_grid, train_cell_mask).item()),
+            "comm_error_holdout_cells": float(mixed_difference_loss(z_grid, holdout_cell_mask).item()),
             "latent_std_mean": float(latent_all[train_idx].std(dim=0, unbiased=False).mean().item()),
+            "train_mask": mask.to(torch.int64).tolist(),
+            "recon_error_grid": ((recon_all - flat).pow(2).mean(dim=-1).reshape(config.grid_size, config.grid_size)).tolist(),
             "final_losses": last_losses,
         }
     return result
@@ -305,8 +332,10 @@ def aggregate_runs(runs: list[dict[str, Any]]) -> dict[str, Any]:
     metrics = [
         "train_recon_mse",
         "test_recon_mse",
+        "generalization_gap",
         "comm_error_all",
         "comm_error_train_cells",
+        "comm_error_holdout_cells",
         "latent_std_mean",
     ]
     summary: dict[str, Any] = {}
@@ -325,12 +354,14 @@ def render_markdown_report(results: dict[str, Any]) -> str:
         "",
         "This report compares baseline, generic smoothness, CFP-only, and CFP-plus-step regularization.",
         "",
+        f"Split strategy: `{results['split_strategy']}`",
+        "",
     ]
     for world, variants in results["summary"].items():
         lines.append(f"## World: {world}")
         lines.append("")
-        lines.append("| Variant | Test Recon MSE | Comm Error | Latent Std |")
-        lines.append("| --- | ---: | ---: | ---: |")
+        lines.append("| Variant | Test Recon MSE | Generalization Gap | Train Comm | Holdout Comm | Latent Std |")
+        lines.append("| --- | ---: | ---: | ---: | ---: | ---: |")
         for variant, metrics in variants.items():
             lines.append(
                 "| "
@@ -338,7 +369,11 @@ def render_markdown_report(results: dict[str, Any]) -> str:
                 + " | "
                 + f"{metrics['test_recon_mse']['mean']:.6f} +/- {metrics['test_recon_mse']['std']:.6f}"
                 + " | "
-                + f"{metrics['comm_error_all']['mean']:.6f} +/- {metrics['comm_error_all']['std']:.6f}"
+                + f"{metrics['generalization_gap']['mean']:.6f} +/- {metrics['generalization_gap']['std']:.6f}"
+                + " | "
+                + f"{metrics['comm_error_train_cells']['mean']:.6f} +/- {metrics['comm_error_train_cells']['std']:.6f}"
+                + " | "
+                + f"{metrics['comm_error_holdout_cells']['mean']:.6f} +/- {metrics['comm_error_holdout_cells']['std']:.6f}"
                 + " | "
                 + f"{metrics['latent_std_mean']['mean']:.6f} +/- {metrics['latent_std_mean']['std']:.6f}"
                 + " |"
@@ -364,25 +399,37 @@ def run_benchmark_suite(
     variants: list[str],
     output_json: str | None = None,
     output_markdown: str | None = None,
+    variant_recipes: dict[str, dict[str, float]] | None = None,
+    split_strategy: str = "random",
     grid_size: int = 8,
     image_size: int = 20,
+    latent_dim: int = 8,
+    hidden_dim: int = 96,
+    train_fraction: float = 0.78,
+    warmup_epochs: int = 40,
     epochs: int = 280,
 ) -> dict[str, Any]:
     raw_runs: list[dict[str, Any]] = []
     summary: dict[str, Any] = {}
+    recipes = variant_recipes or VARIANT_DEFAULTS
 
     for world in worlds:
         summary[world] = {}
         for variant in variants:
             variant_runs = []
             for seed in seeds:
-                kwargs = dict(VARIANT_DEFAULTS[variant])
+                kwargs = dict(recipes[variant])
                 config = BenchmarkConfig(
                     world=world,
                     variant=variant,
                     seed=seed,
+                    split_strategy=split_strategy,
                     grid_size=grid_size,
                     image_size=image_size,
+                    latent_dim=latent_dim,
+                    hidden_dim=hidden_dim,
+                    train_fraction=train_fraction,
+                    warmup_epochs=warmup_epochs,
                     epochs=epochs,
                     **kwargs,
                 )
@@ -391,7 +438,15 @@ def run_benchmark_suite(
                 variant_runs.append(run)
             summary[world][variant] = aggregate_runs(variant_runs)
 
-    output = {"seeds": seeds, "worlds": worlds, "variants": variants, "summary": summary, "runs": raw_runs}
+    output = {
+        "seeds": seeds,
+        "worlds": worlds,
+        "variants": variants,
+        "variant_recipes": recipes,
+        "split_strategy": split_strategy,
+        "summary": summary,
+        "runs": raw_runs,
+    }
 
     if output_json:
         path = Path(output_json)

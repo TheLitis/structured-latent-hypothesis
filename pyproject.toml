@@ -9,6 +9,7 @@ description = "Synthetic benchmarks and regularizers for the Commutative Flatnes
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
+  "matplotlib>=3.9",
   "numpy>=1.26",
   "torch>=2.5",
 ]
