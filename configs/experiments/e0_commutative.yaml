@@ -1,0 +1,3 @@
+extends: ../base.yaml
+world: commutative
+goal: Validate that CFP improves held-out composition when factors commute.

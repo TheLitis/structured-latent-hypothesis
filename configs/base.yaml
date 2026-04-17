@@ -1,0 +1,19 @@
+benchmark:
+  grid_size: 8
+  image_size: 20
+  latent_dim: 8
+  hidden_dim: 96
+  train_fraction: 0.78
+  epochs: 280
+  lr: 0.003
+  seeds: [3, 11, 29]
+  worlds: [commutative, noncommutative]
+  variants: [baseline, smooth, comm, comm_step]
+
+regularization:
+  lambda_comm: 0.18
+  lambda_step: 0.08
+  lambda_smooth: 0.05
+  lambda_var: 0.001
+  sigma_min: 0.35
+  warmup_epochs: 40

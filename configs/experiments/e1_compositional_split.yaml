@@ -1,0 +1,3 @@
+extends: ../base.yaml
+status: planned
+goal: Move from synthetic factor grids to a broader compositional split with unseen combinations.

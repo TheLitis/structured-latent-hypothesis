@@ -1,0 +1,3 @@
+extends: ../base.yaml
+status: planned
+goal: Test commutative regularization in self-supervised form through ordered augmentation pairs.

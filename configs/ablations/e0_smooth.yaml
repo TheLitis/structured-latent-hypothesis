@@ -1,0 +1,5 @@
+extends: ../base.yaml
+variant: smooth
+lambda_comm: 0.0
+lambda_step: 0.0
+lambda_smooth: 0.05

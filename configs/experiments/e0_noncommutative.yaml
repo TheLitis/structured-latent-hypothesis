@@ -1,0 +1,3 @@
+extends: ../base.yaml
+world: noncommutative
+goal: Check that CFP does not show the same gain on an order-sensitive control.
