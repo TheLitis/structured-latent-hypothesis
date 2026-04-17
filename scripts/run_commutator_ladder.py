@@ -81,7 +81,7 @@ def main() -> None:
         )
 
     report_lines = [
-        f"# Matched Commutator Ladder V1 ({args.family})",
+        f"# Matched Commutator Ladder ({args.family})",
         "",
         f"Split strategy: `{results['split_strategy']}`",
         "",
