@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from collections import Counter
 from pathlib import Path
 
 from structured_latent_hypothesis.plotting import load_results, plot_gain_vs_commutator, plot_metric_vs_lambda, plot_pareto
@@ -19,6 +20,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--family", choices=["ramp", "scale", "rotation"], default="ramp")
     parser.add_argument("--worlds", nargs="+", default=None)
     parser.add_argument("--split-strategy", default="cartesian_blocks")
+    parser.add_argument("--selection-mode", choices=["manual", "nested"], default="manual")
+    parser.add_argument("--lambda-grid", type=float, nargs="+", default=[0.005, 0.01, 0.02, 0.05, 0.10])
+    parser.add_argument("--inner-train-fraction", type=float, default=0.72)
     return parser.parse_args()
 
 
@@ -35,18 +39,62 @@ def default_worlds(family: str) -> list[str]:
     return [f"{prefix}_{value:0.2f}" for value in values]
 
 
+def format_lambda(value: float) -> str:
+    return f"{value:0.3f}"
+
+
+def build_variant_recipes(args: argparse.Namespace) -> dict[str, dict]:
+    recipes: dict[str, dict] = {
+        "baseline": {},
+        "smooth": {"lambda_smooth": 0.05},
+        "cfp_l0.010": {"lambda_comm": 0.01},
+        "cfp_l0.050": {"lambda_comm": 0.05},
+    }
+    if args.selection_mode == "nested":
+        cfp_candidates = {
+            f"cfp_candidate_l{format_lambda(value)}": {"lambda_comm": float(value)}
+            for value in args.lambda_grid
+        }
+        step_candidates = {
+            f"step_candidate_l{format_lambda(value)}": {"lambda_step": float(value)}
+            for value in args.lambda_grid
+        }
+        recipes["step_selected"] = {
+            "selection": {
+                "metric": "test_recon_mse",
+                "inner_train_fraction": float(args.inner_train_fraction),
+                "candidates": step_candidates,
+            }
+        }
+        recipes["cfp_selected"] = {
+            "selection": {
+                "metric": "test_recon_mse",
+                "inner_train_fraction": float(args.inner_train_fraction),
+                "candidates": cfp_candidates,
+            }
+        }
+    return recipes
+
+
+def selection_summary(results: dict, world: str, variant: str) -> str | None:
+    chosen = []
+    for run in results["runs"]:
+        config = run["config"]
+        if config["world"] == world and config["variant"] == variant and "selection" in run:
+            chosen.append(run["selection"]["chosen_candidate"])
+    if not chosen:
+        return None
+    counts = Counter(chosen)
+    return ", ".join(f"{name} x{counts[name]}" for name in sorted(counts))
+
+
 def main() -> None:
     args = parse_args()
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     worlds = args.worlds or default_worlds(args.family)
 
-    variant_recipes = {
-        "baseline": {},
-        "smooth": {"lambda_smooth": 0.05},
-        "cfp_l0.010": {"lambda_comm": 0.01},
-        "cfp_l0.050": {"lambda_comm": 0.05},
-    }
+    variant_recipes = build_variant_recipes(args)
     variants = list(variant_recipes.keys())
     results_path = output_dir / "results.json"
     summary_path = output_dir / "summary.md"
@@ -74,16 +122,31 @@ def main() -> None:
     for world in results["worlds"]:
         magnitude = results["world_metadata"][world]["ground_truth_commutator"]
         baseline = results["summary"][world]["baseline"]["test_recon_mse"]["mean"]
-        cfp_small = results["summary"][world]["cfp_l0.010"]["test_recon_mse"]["mean"]
-        cfp_mid = results["summary"][world]["cfp_l0.050"]["test_recon_mse"]["mean"]
-        observations.append(
-            f"- `{world}`: commutator `{magnitude:.6f}`, baseline `{baseline:.6f}`, cfp_l0.010 `{cfp_small:.6f}`, cfp_l0.050 `{cfp_mid:.6f}`."
-        )
+        parts = [f"commutator `{magnitude:.6f}`", f"baseline `{baseline:.6f}`"]
+        if "smooth" in results["summary"][world]:
+            smooth = results["summary"][world]["smooth"]["test_recon_mse"]["mean"]
+            parts.append(f"smooth `{smooth:.6f}`")
+        if "cfp_l0.010" in results["summary"][world]:
+            cfp_small = results["summary"][world]["cfp_l0.010"]["test_recon_mse"]["mean"]
+            parts.append(f"cfp_l0.010 `{cfp_small:.6f}`")
+        if "cfp_l0.050" in results["summary"][world]:
+            cfp_mid = results["summary"][world]["cfp_l0.050"]["test_recon_mse"]["mean"]
+            parts.append(f"cfp_l0.050 `{cfp_mid:.6f}`")
+        if "step_selected" in results["summary"][world]:
+            step_selected = results["summary"][world]["step_selected"]["test_recon_mse"]["mean"]
+            step_choices = selection_summary(results, world, "step_selected")
+            parts.append(f"step_selected `{step_selected:.6f}` ({step_choices})")
+        if "cfp_selected" in results["summary"][world]:
+            cfp_selected = results["summary"][world]["cfp_selected"]["test_recon_mse"]["mean"]
+            cfp_choices = selection_summary(results, world, "cfp_selected")
+            parts.append(f"cfp_selected `{cfp_selected:.6f}` ({cfp_choices})")
+        observations.append(f"- `{world}`: " + ", ".join(parts) + ".")
 
     report_lines = [
         f"# Matched Commutator Ladder ({args.family})",
         "",
         f"Split strategy: `{results['split_strategy']}`",
+        f"Selection mode: `{args.selection_mode}`",
         "",
         "## Observations",
         "",

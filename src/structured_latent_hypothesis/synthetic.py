@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import math
 import random
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from statistics import mean, pstdev
 from typing import Any
@@ -36,6 +36,7 @@ class BenchmarkConfig:
 VARIANT_DEFAULTS: dict[str, dict[str, float]] = {
     "baseline": {},
     "smooth": {"lambda_smooth": 0.05},
+    "step_only": {"lambda_step": 0.08},
     "comm": {"lambda_comm": 0.18},
     "comm_step": {"lambda_comm": 0.18, "lambda_step": 0.08},
 }
@@ -298,13 +299,13 @@ def ground_truth_commutator_magnitude(world: str, grid_size: int, image_size: in
     return mean(diffs)
 
 
-def cartesian_block_train_mask(grid_size: int) -> torch.Tensor:
+def cartesian_block_train_mask(grid_size: int, row_phase: int = 0, col_phase: int = 0) -> torch.Tensor:
     if grid_size < 6:
         raise ValueError("cartesian_blocks split requires grid_size >= 6.")
 
     mask = torch.ones((grid_size, grid_size), dtype=torch.bool)
-    holdout_rows = [index for index in range(grid_size) if index % 4 in (1, 2)]
-    holdout_cols = [index for index in range(grid_size) if index % 4 in (1, 2)]
+    holdout_rows = [index for index in range(grid_size) if (index + row_phase) % 4 in (1, 2)]
+    holdout_cols = [index for index in range(grid_size) if (index + col_phase) % 4 in (1, 2)]
     for row in holdout_rows:
         for col in holdout_cols:
             mask[row, col] = False
@@ -331,6 +332,41 @@ def sample_train_mask(grid_size: int, train_fraction: float, seed: int, split_st
     if split_strategy == "cartesian_blocks":
         return cartesian_block_train_mask(grid_size)
     raise ValueError(f"Unsupported split strategy: {split_strategy}")
+
+
+def sample_nested_train_mask(base_mask: torch.Tensor, seed: int, keep_fraction: float = 0.72) -> torch.Tensor:
+    if keep_fraction <= 0.0 or keep_fraction >= 1.0:
+        raise ValueError("keep_fraction must be between 0 and 1.")
+
+    base_mask = base_mask.to(torch.bool)
+    grid_size = base_mask.shape[0]
+    base_rows = base_mask.sum(dim=1)
+    base_cols = base_mask.sum(dim=0)
+    total_base = int(base_mask.sum().item())
+    min_validation = max(4, int(round(total_base * (1.0 - keep_fraction))))
+    min_cells = max(4, int(0.18 * max(1, int(cell_mask(base_mask).sum().item()))))
+
+    phases = [(row_phase, col_phase) for row_phase in range(4) for col_phase in range(4)]
+    offset = seed % len(phases)
+    for index in range(len(phases)):
+        row_phase, col_phase = phases[(index + offset) % len(phases)]
+        if row_phase == 0 and col_phase == 0:
+            continue
+
+        selector = cartesian_block_train_mask(grid_size, row_phase=row_phase, col_phase=col_phase)
+        proposal = base_mask & selector
+        validation_points = int((base_mask & ~proposal).sum().item())
+        if validation_points < min_validation:
+            continue
+        if torch.any(proposal.sum(dim=1)[base_rows > 0] < 2):
+            continue
+        if torch.any(proposal.sum(dim=0)[base_cols > 0] < 2):
+            continue
+        if int(cell_mask(proposal).sum().item()) < min_cells:
+            continue
+        return proposal
+
+    raise RuntimeError("Failed to sample a usable nested inner-train mask.")
 
 
 class AutoEncoder(nn.Module):
@@ -430,20 +466,29 @@ def mse(pred: torch.Tensor, target: torch.Tensor) -> float:
     return float(nn.functional.mse_loss(pred, target).item())
 
 
-def train_one(config: BenchmarkConfig) -> dict[str, Any]:
+def train_one(
+    config: BenchmarkConfig,
+    train_mask_override: torch.Tensor | None = None,
+    eval_mask_override: torch.Tensor | None = None,
+) -> dict[str, Any]:
     set_seed(config.seed)
     images = generate_world(config.world, config.grid_size, config.image_size)
-    mask = sample_train_mask(config.grid_size, config.train_fraction, config.seed, config.split_strategy)
+    mask = (
+        train_mask_override.clone().to(torch.bool)
+        if train_mask_override is not None
+        else sample_train_mask(config.grid_size, config.train_fraction, config.seed, config.split_strategy)
+    )
+    eval_mask = eval_mask_override.clone().to(torch.bool) if eval_mask_override is not None else ~mask
 
     flat = images.reshape(config.grid_size * config.grid_size, -1)
     train_idx = mask.reshape(-1)
-    test_idx = ~train_idx
+    test_idx = eval_mask.reshape(-1)
 
     model = AutoEncoder(flat.shape[-1], config.hidden_dim, config.latent_dim)
     optimizer = torch.optim.Adam(model.parameters(), lr=config.lr)
 
     train_cell_mask = cell_mask(mask)
-    holdout_cell_mask = cell_mask(~mask)
+    holdout_cell_mask = cell_mask(eval_mask)
 
     last_losses: dict[str, float] = {}
     for epoch in range(config.epochs):
@@ -496,10 +541,63 @@ def train_one(config: BenchmarkConfig) -> dict[str, Any]:
             "comm_error_holdout_cells": float(mixed_difference_loss(z_grid, holdout_cell_mask).item()),
             "latent_std_mean": float(latent_all[train_idx].std(dim=0, unbiased=False).mean().item()),
             "train_mask": mask.to(torch.int64).tolist(),
+            "eval_mask": eval_mask.to(torch.int64).tolist(),
             "recon_error_grid": ((recon_all - flat).pow(2).mean(dim=-1).reshape(config.grid_size, config.grid_size)).tolist(),
             "final_losses": last_losses,
         }
     return result
+
+
+def train_with_nested_selection(
+    config: BenchmarkConfig,
+    candidate_recipes: dict[str, dict[str, float]],
+    selection_metric: str = "test_recon_mse",
+    inner_train_fraction: float = 0.72,
+) -> dict[str, Any]:
+    outer_train_mask = sample_train_mask(config.grid_size, config.train_fraction, config.seed, config.split_strategy)
+    inner_train_mask = sample_nested_train_mask(outer_train_mask, config.seed, keep_fraction=inner_train_fraction)
+    inner_eval_mask = outer_train_mask & ~inner_train_mask
+
+    if not torch.any(inner_eval_mask):
+        raise RuntimeError("Nested selection produced an empty inner validation set.")
+
+    selection_scores = []
+    best_name = ""
+    best_recipe: dict[str, float] = {}
+    best_score = float("inf")
+
+    for candidate_name, candidate_recipe in candidate_recipes.items():
+        candidate_config = replace(config, variant=candidate_name, **candidate_recipe)
+        selection_run = train_one(
+            candidate_config,
+            train_mask_override=inner_train_mask,
+            eval_mask_override=inner_eval_mask,
+        )
+        score = float(selection_run[selection_metric])
+        selection_scores.append(
+            {
+                "candidate": candidate_name,
+                "recipe": candidate_recipe,
+                "selection_metric": selection_metric,
+                "score": score,
+            }
+        )
+        if score < best_score - 1e-12:
+            best_name = candidate_name
+            best_recipe = dict(candidate_recipe)
+            best_score = score
+
+    final_config = replace(config, **best_recipe)
+    final_run = train_one(final_config, train_mask_override=outer_train_mask)
+    final_run["selection"] = {
+        "mode": "nested",
+        "metric": selection_metric,
+        "inner_train_fraction": inner_train_fraction,
+        "chosen_candidate": best_name,
+        "chosen_recipe": best_recipe,
+        "scores": selection_scores,
+    }
+    return final_run
 
 
 def aggregate_runs(runs: list[dict[str, Any]]) -> dict[str, Any]:
@@ -592,7 +690,8 @@ def run_benchmark_suite(
         for variant in variants:
             variant_runs = []
             for seed in seeds:
-                kwargs = dict(recipes[variant])
+                recipe = dict(recipes[variant])
+                selection = recipe.pop("selection", None)
                 config = BenchmarkConfig(
                     world=world,
                     variant=variant,
@@ -605,9 +704,17 @@ def run_benchmark_suite(
                     train_fraction=train_fraction,
                     warmup_epochs=warmup_epochs,
                     epochs=epochs,
-                    **kwargs,
+                    **recipe,
                 )
-                run = train_one(config)
+                if selection is None:
+                    run = train_one(config)
+                else:
+                    run = train_with_nested_selection(
+                        config,
+                        candidate_recipes=selection["candidates"],
+                        selection_metric=selection.get("metric", "test_recon_mse"),
+                        inner_train_fraction=float(selection.get("inner_train_fraction", 0.72)),
+                    )
                 raw_runs.append(run)
                 variant_runs.append(run)
             summary[world][variant] = aggregate_runs(variant_runs)

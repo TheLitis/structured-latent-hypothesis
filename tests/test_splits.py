@@ -2,7 +2,7 @@ import unittest
 
 import torch
 
-from structured_latent_hypothesis.synthetic import cartesian_block_train_mask, cell_mask
+from structured_latent_hypothesis.synthetic import cartesian_block_train_mask, cell_mask, sample_nested_train_mask
 
 
 class SplitStrategyTest(unittest.TestCase):
@@ -15,6 +15,18 @@ class SplitStrategyTest(unittest.TestCase):
         self.assertTrue(mask[1, 0].item())
         self.assertFalse(mask[1, 1].item())
         self.assertFalse(mask[5, 6].item())
+
+    def test_nested_split_stays_inside_outer_train_mask(self) -> None:
+        outer = cartesian_block_train_mask(8)
+        inner = sample_nested_train_mask(outer, seed=3)
+        inner_val = outer & ~inner
+
+        self.assertTrue(torch.all(inner <= outer))
+        self.assertGreater(int(inner.sum().item()), 0)
+        self.assertGreater(int(inner_val.sum().item()), 0)
+        self.assertGreater(int(cell_mask(inner).sum().item()), 0)
+        self.assertTrue(torch.all(inner.sum(dim=1)[outer.sum(dim=1) > 0] >= 2))
+        self.assertTrue(torch.all(inner.sum(dim=0)[outer.sum(dim=0) > 0] >= 2))
 
 
 if __name__ == "__main__":
