@@ -377,6 +377,68 @@ class AdditiveHankelDefectDecoder(nn.Module):
         return recon, latents, self.residual_grid()
 
 
+class AdditiveCurvatureHankelDecoder(nn.Module):
+    def __init__(self, grid_size: int, latent_dim: int, hidden_dim: int, output_dim: int, interaction_rank: int) -> None:
+        super().__init__()
+        if interaction_rank <= 0:
+            raise ValueError("interaction_rank must be positive for AdditiveCurvatureHankelDecoder.")
+        self.row = nn.Parameter(torch.empty(grid_size, latent_dim))
+        self.col = nn.Parameter(torch.empty(grid_size, latent_dim))
+        self.curv_row_scores = nn.Parameter(torch.empty(grid_size - 1, interaction_rank))
+        self.curv_col_scores = nn.Parameter(torch.empty(grid_size - 1, interaction_rank))
+        self.curv_basis = nn.Parameter(torch.empty(interaction_rank, latent_dim))
+        self.diag_second_diff = nn.Parameter(torch.empty((2 * grid_size) - 3, interaction_rank))
+        self.diag_basis = nn.Parameter(torch.empty(interaction_rank, latent_dim))
+        diagonal_index = torch.arange(grid_size, dtype=torch.long)
+        self.register_buffer("diag_indices", diagonal_index[:, None] + diagonal_index[None, :], persistent=False)
+        nn.init.normal_(self.row, mean=0.0, std=0.02)
+        nn.init.normal_(self.col, mean=0.0, std=0.02)
+        nn.init.normal_(self.curv_row_scores, mean=0.0, std=0.02)
+        nn.init.normal_(self.curv_col_scores, mean=0.0, std=0.02)
+        nn.init.normal_(self.curv_basis, mean=0.0, std=0.02)
+        nn.init.normal_(self.diag_second_diff, mean=0.0, std=0.02)
+        nn.init.normal_(self.diag_basis, mean=0.0, std=0.02)
+        self.decoder = SharedDecoder(latent_dim, hidden_dim, output_dim)
+
+    def curvature_grid(self) -> torch.Tensor:
+        row_scores = self.curv_row_scores - self.curv_row_scores.mean(dim=0, keepdim=True)
+        col_scores = self.curv_col_scores - self.curv_col_scores.mean(dim=0, keepdim=True)
+        return torch.einsum("ir,jr,rd->ijd", row_scores, col_scores, self.curv_basis)
+
+    def curvature_interaction(self) -> torch.Tensor:
+        return integrate_curvature_field(self.curvature_grid(), self.row.shape[0])
+
+    def diagonal_profile(self) -> torch.Tensor:
+        length = (2 * self.row.shape[0]) - 1
+        profile = torch.zeros(length, self.diag_second_diff.shape[1], dtype=self.row.dtype, device=self.row.device)
+        for index in range(self.diag_second_diff.shape[0]):
+            profile[index + 2] = (2.0 * profile[index + 1]) - profile[index] + self.diag_second_diff[index]
+        return profile
+
+    def hankel_interaction(self) -> torch.Tensor:
+        profile = self.diagonal_profile()
+        defect_codes = profile[self.diag_indices]
+        return torch.einsum("ijr,rd->ijd", defect_codes, self.diag_basis)
+
+    def interaction_grid(self) -> torch.Tensor:
+        return self.curvature_interaction() + self.hankel_interaction()
+
+    def latent_grid(self) -> torch.Tensor:
+        base = self.row[:, None, :] + self.col[None, :, :]
+        return base + self.interaction_grid()
+
+    def residual_grid(self) -> torch.Tensor:
+        return self.interaction_grid()
+
+    def regularizer_grid(self) -> torch.Tensor:
+        return torch.cat([self.curvature_grid(), mixed_difference(self.hankel_interaction())], dim=-1)
+
+    def forward(self) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        latents = self.latent_grid()
+        recon = self.decoder(latents.reshape(-1, latents.shape[-1])).reshape(latents.shape[0], latents.shape[1], -1)
+        return recon, latents, self.residual_grid()
+
+
 def build_model(config: DirectBenchmarkConfig, output_dim: int) -> nn.Module:
     if config.model_type == "coord":
         return CoordLatentDecoder(config.grid_size, config.latent_dim, config.hidden_dim, output_dim)
@@ -428,6 +490,14 @@ def build_model(config: DirectBenchmarkConfig, output_dim: int) -> nn.Module:
         )
     if config.model_type == "additive_hankel_defect":
         return AdditiveHankelDefectDecoder(
+            config.grid_size,
+            config.latent_dim,
+            config.hidden_dim,
+            output_dim,
+            interaction_rank=config.interaction_rank,
+        )
+    if config.model_type == "additive_curvature_hankel":
+        return AdditiveCurvatureHankelDecoder(
             config.grid_size,
             config.latent_dim,
             config.hidden_dim,
