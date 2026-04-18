@@ -61,6 +61,8 @@ class MatchedWorldTest(unittest.TestCase):
         self.assertEqual(ground_truth_commutator_magnitude("stepcurve_2.00", 8, 20), 0.0)
         self.assertLess(float(ground_truth_step_drift_magnitude("stepcurve_1.00", 8)), 1e-12)
         self.assertGreater(float(ground_truth_step_drift_magnitude("stepcurve_2.00", 8)), 0.0)
+        self.assertGreater(float(ground_truth_commutator_magnitude("stepcurve_path_1.00", 8, 20)), 0.0)
+        self.assertGreater(float(ground_truth_step_drift_magnitude("stepcurve_path_2.00", 8)), 0.0)
 
 
 if __name__ == "__main__":

@@ -113,6 +113,15 @@ def brightness_curve(grid_size: int, gamma: float) -> torch.Tensor:
     return 1.0 + 0.45 * signed_power
 
 
+def phase_coordinates(grid_size: int) -> torch.Tensor:
+    return torch.linspace(-1.0, 1.0, grid_size)
+
+
+def apply_phase_ramp_operator(image: torch.Tensor, brightness: float, phase: float, interaction: float) -> torch.Tensor:
+    modulator = float(brightness) * (1.0 + float(interaction) * float(phase) * horizontal_ramp(image.shape[-1]))
+    return (image * modulator).clamp(0.0, 1.0)
+
+
 def shift_brightness_curve_world(base: torch.Tensor, grid_size: int, gamma: float) -> torch.Tensor:
     shifts = torch.round(torch.linspace(-3.0, 3.0, grid_size)).to(torch.int64)
     brightness = brightness_curve(grid_size, gamma=gamma)
@@ -122,6 +131,20 @@ def shift_brightness_curve_world(base: torch.Tensor, grid_size: int, gamma: floa
         shifted = apply_shift(base, int(shift))
         for scale in brightness.tolist():
             row.append((shifted * float(scale)).clamp(0.0, 1.0))
+        world.append(torch.stack(row))
+    return torch.stack(world)
+
+
+def shift_brightness_curve_path_world(base: torch.Tensor, grid_size: int, gamma: float, interaction: float = 0.22) -> torch.Tensor:
+    shifts = torch.round(torch.linspace(-3.0, 3.0, grid_size)).to(torch.int64)
+    phases = phase_coordinates(grid_size)
+    brightness = brightness_curve(grid_size, gamma=gamma)
+    world = []
+    for shift in shifts.tolist():
+        row = []
+        shifted = apply_shift(base, int(shift))
+        for phase, scale in zip(phases.tolist(), brightness.tolist()):
+            row.append(apply_phase_ramp_operator(shifted, float(scale), float(phase), interaction))
         world.append(torch.stack(row))
     return torch.stack(world)
 
@@ -253,6 +276,15 @@ def parse_matched_world(world: str) -> tuple[str, float] | None:
 
 def parse_step_curve_world(world: str) -> float | None:
     prefix = "stepcurve_"
+    if world.startswith("stepcurve_path_"):
+        return None
+    if world.startswith(prefix):
+        return float(world[len(prefix) :])
+    return None
+
+
+def parse_step_curve_path_world(world: str) -> float | None:
+    prefix = "stepcurve_path_"
     if world.startswith(prefix):
         return float(world[len(prefix) :])
     return None
@@ -269,6 +301,9 @@ def generate_world(world: str, grid_size: int, image_size: int) -> torch.Tensor:
             return matched_shift_scale_world(base, grid_size, matched_strength)
         if family == "rotation":
             return matched_shift_rotation_world(base, grid_size, matched_strength)
+    step_curve_path = parse_step_curve_path_world(world)
+    if step_curve_path is not None:
+        return shift_brightness_curve_path_world(base, grid_size, gamma=step_curve_path)
     step_curve = parse_step_curve_world(world)
     if step_curve is not None:
         return shift_brightness_curve_world(base, grid_size, gamma=step_curve)
@@ -282,6 +317,19 @@ def generate_world(world: str, grid_size: int, image_size: int) -> torch.Tensor:
 def ground_truth_commutator_magnitude(world: str, grid_size: int, image_size: int) -> float | None:
     matched_world = parse_matched_world(world)
     if matched_world is None:
+        step_curve_path = parse_step_curve_path_world(world)
+        if step_curve_path is not None:
+            base = build_base_pattern(image_size)
+            shifts = torch.round(torch.linspace(-3.0, 3.0, grid_size)).to(torch.int64)
+            phases = phase_coordinates(grid_size)
+            brightness = brightness_curve(grid_size, gamma=step_curve_path)
+            diffs = []
+            for shift in shifts.tolist():
+                for phase, scale in zip(phases.tolist(), brightness.tolist()):
+                    ab = apply_phase_ramp_operator(apply_shift(base, int(shift)), float(scale), float(phase), 0.22)
+                    ba = apply_shift(apply_phase_ramp_operator(base, float(scale), float(phase), 0.22), int(shift))
+                    diffs.append(float((ab - ba).pow(2).mean().item()))
+            return mean(diffs)
         if parse_step_curve_world(world) is not None:
             return 0.0
         return None
@@ -332,6 +380,8 @@ def ground_truth_commutator_magnitude(world: str, grid_size: int, image_size: in
 
 def ground_truth_step_drift_magnitude(world: str, grid_size: int) -> float | None:
     gamma = parse_step_curve_world(world)
+    if gamma is None:
+        gamma = parse_step_curve_path_world(world)
     if gamma is None:
         return None
     brightness = brightness_curve(grid_size, gamma=gamma)
