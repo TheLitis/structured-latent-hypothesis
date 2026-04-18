@@ -196,6 +196,139 @@ def leave_one_seed_out_router(rows: list[dict], score_key: str) -> dict:
     }
 
 
+def confusion_counts(labels: list[bool], predictions: list[bool]) -> dict[str, int]:
+    tp = sum(int(label and prediction) for label, prediction in zip(labels, predictions))
+    tn = sum(int((not label) and (not prediction)) for label, prediction in zip(labels, predictions))
+    fp = sum(int((not label) and prediction) for label, prediction in zip(labels, predictions))
+    fn = sum(int(label and (not prediction)) for label, prediction in zip(labels, predictions))
+    return {"tp": tp, "tn": tn, "fp": fp, "fn": fn}
+
+
+def balanced_accuracy_from_counts(counts: dict[str, int]) -> float:
+    tpr_denom = counts["tp"] + counts["fn"]
+    tnr_denom = counts["tn"] + counts["fp"]
+    true_positive_rate = counts["tp"] / tpr_denom if tpr_denom > 0 else 0.5
+    true_negative_rate = counts["tn"] / tnr_denom if tnr_denom > 0 else 0.5
+    return 0.5 * (true_positive_rate + true_negative_rate)
+
+
+def average_cost_from_counts(counts: dict[str, int], false_positive_cost: float, false_negative_cost: float) -> float:
+    total = counts["tp"] + counts["tn"] + counts["fp"] + counts["fn"]
+    if total == 0:
+        return 0.0
+    return (counts["fp"] * false_positive_cost + counts["fn"] * false_negative_cost) / total
+
+
+def select_cost_sensitive_threshold(
+    rows: list[dict],
+    score_key: str,
+    label_key: str,
+    *,
+    false_positive_cost: float,
+    false_negative_cost: float,
+) -> dict:
+    unique_scores = sorted({float(row[score_key]) for row in rows})
+    best: tuple[float, float, float, float, float, str] | None = None
+    for threshold in unique_scores:
+        for direction in ("low", "high"):
+            labels = [bool(row[label_key]) for row in rows]
+            predictions = [
+                (row[score_key] <= threshold if direction == "low" else row[score_key] >= threshold) for row in rows
+            ]
+            counts = confusion_counts(labels, predictions)
+            average_cost = average_cost_from_counts(counts, false_positive_cost, false_negative_cost)
+            balanced_accuracy = balanced_accuracy_from_counts(counts)
+            accuracy = (counts["tp"] + counts["tn"]) / len(rows)
+            positive_rate = sum(predictions) / len(predictions)
+            candidate = (average_cost, -balanced_accuracy, -accuracy, abs(positive_rate - 0.5), threshold, direction)
+            if best is None or candidate < best:
+                best = candidate
+    assert best is not None
+    return {
+        "threshold": best[4],
+        "direction": best[5],
+        "train_cost": best[0],
+        "train_balanced_accuracy": -best[1],
+        "train_accuracy": -best[2],
+    }
+
+
+def evaluate_cost_sensitive_threshold(
+    rows: list[dict],
+    score_key: str,
+    label_key: str,
+    *,
+    threshold: float,
+    direction: str,
+    false_positive_cost: float,
+    false_negative_cost: float,
+) -> dict:
+    labels = [bool(row[label_key]) for row in rows]
+    predictions = [
+        (row[score_key] <= threshold if direction == "low" else row[score_key] >= threshold) for row in rows
+    ]
+    counts = confusion_counts(labels, predictions)
+    positive_rate = sum(predictions) / len(predictions) if predictions else 0.0
+    always_positive_counts = confusion_counts(labels, [True] * len(labels))
+    always_negative_counts = confusion_counts(labels, [False] * len(labels))
+    return {
+        "average_cost": average_cost_from_counts(counts, false_positive_cost, false_negative_cost),
+        "accuracy": (counts["tp"] + counts["tn"]) / len(rows) if rows else 0.0,
+        "balanced_accuracy": balanced_accuracy_from_counts(counts),
+        "positive_rate": positive_rate,
+        "counts": counts,
+        "always_positive_cost": average_cost_from_counts(
+            always_positive_counts, false_positive_cost, false_negative_cost
+        ),
+        "always_negative_cost": average_cost_from_counts(
+            always_negative_counts, false_positive_cost, false_negative_cost
+        ),
+    }
+
+
+def leave_one_seed_out_classifier(
+    rows: list[dict],
+    score_key: str,
+    label_key: str,
+    *,
+    false_positive_cost: float,
+    false_negative_cost: float,
+) -> dict:
+    per_seed: list[dict] = []
+    for seed in sorted({row["seed"] for row in rows}):
+        train_rows = [row for row in rows if row["seed"] != seed]
+        test_rows = [row for row in rows if row["seed"] == seed]
+        selected = select_cost_sensitive_threshold(
+            train_rows,
+            score_key,
+            label_key,
+            false_positive_cost=false_positive_cost,
+            false_negative_cost=false_negative_cost,
+        )
+        metrics = evaluate_cost_sensitive_threshold(
+            test_rows,
+            score_key,
+            label_key,
+            threshold=selected["threshold"],
+            direction=selected["direction"],
+            false_positive_cost=false_positive_cost,
+            false_negative_cost=false_negative_cost,
+        )
+        metrics["seed"] = seed
+        metrics["threshold"] = selected["threshold"]
+        metrics["direction"] = selected["direction"]
+        per_seed.append(metrics)
+    return {
+        "per_seed": per_seed,
+        "average_cost_mean": sum(row["average_cost"] for row in per_seed) / len(per_seed),
+        "accuracy_mean": sum(row["accuracy"] for row in per_seed) / len(per_seed),
+        "balanced_accuracy_mean": sum(row["balanced_accuracy"] for row in per_seed) / len(per_seed),
+        "positive_rate_mean": sum(row["positive_rate"] for row in per_seed) / len(per_seed),
+        "always_positive_cost_mean": sum(row["always_positive_cost"] for row in per_seed) / len(per_seed),
+        "always_negative_cost_mean": sum(row["always_negative_cost"] for row in per_seed) / len(per_seed),
+    }
+
+
 def analyze_context_transfer_criterion(rows: list[dict]) -> dict:
     subsets = ["all", "coupled", "commuting", "low_alpha", "high_alpha"]
     targets = {
@@ -226,6 +359,97 @@ def analyze_context_transfer_criterion(rows: list[dict]) -> dict:
             "router": leave_one_seed_out_router(variant_rows, score_key),
         }
     return analyses
+
+
+def annotate_transfer_tasks(
+    rows: list[dict],
+    *,
+    step_budgets: list[int],
+    regret_tolerances: list[float],
+) -> list[dict]:
+    annotated: list[dict] = []
+    for row in rows:
+        updated = dict(row)
+        regret = row["structured_zero_shot_rollout5_mse"] - row["full_zero_shot_rollout5_mse"]
+        for budget in step_budgets:
+            updated[f"task_within_budget_{budget}"] = row["full_adaptation_steps"] <= budget
+        for tolerance in regret_tolerances:
+            key = format(tolerance, ".0e") if tolerance > 0 else "0"
+            updated[f"task_safe_regret_{key}"] = regret <= tolerance
+        annotated.append(updated)
+    return annotated
+
+
+def analyze_context_transfer_budget(
+    rows: list[dict],
+    *,
+    step_budgets: list[int],
+    regret_tolerances: list[float],
+    false_positive_cost: float = 3.0,
+    false_negative_cost: float = 1.0,
+) -> dict:
+    annotated_rows = annotate_transfer_tasks(rows, step_budgets=step_budgets, regret_tolerances=regret_tolerances)
+    task_specs: dict[str, dict] = {}
+    for budget in step_budgets:
+        task_specs[f"within_budget_{budget}"] = {
+            "label_key": f"task_within_budget_{budget}",
+            "false_positive_cost": false_positive_cost,
+            "false_negative_cost": false_negative_cost,
+        }
+    for tolerance in regret_tolerances:
+        suffix = format(tolerance, ".0e") if tolerance > 0 else "0"
+        task_specs[f"safe_regret_{suffix}"] = {
+            "label_key": f"task_safe_regret_{suffix}",
+            "false_positive_cost": false_positive_cost,
+            "false_negative_cost": false_negative_cost,
+        }
+
+    analyses: dict[str, dict] = {}
+    for candidate_name, (variant, score_suffix) in CANDIDATE_SPECS.items():
+        score_key = f"score_{score_suffix}"
+        variant_rows = [row for row in annotated_rows if row["variant"] == variant]
+        task_results: dict[str, dict] = {}
+        for task_name, task_config in task_specs.items():
+            task_results[task_name] = leave_one_seed_out_classifier(
+                variant_rows,
+                score_key,
+                task_config["label_key"],
+                false_positive_cost=task_config["false_positive_cost"],
+                false_negative_cost=task_config["false_negative_cost"],
+            )
+        analyses[candidate_name] = {
+            "variant": variant,
+            "score_key": score_key,
+            "tasks": task_results,
+        }
+    return {"rows": annotated_rows, "analyses": analyses, "task_specs": task_specs}
+
+
+def render_budget_markdown(results: dict) -> str:
+    task_names = list(results["task_specs"].keys())
+    lines = ["# Context Transfer Budget Benchmark", ""]
+    for task_name in task_names:
+        lines.extend(
+            [
+                f"## Task: {task_name}",
+                "",
+                "| Candidate | LOO Cost | Always Pos Cost | Always Neg Cost | LOO Balanced Acc | LOO Acc |",
+                "| --- | ---: | ---: | ---: | ---: | ---: |",
+            ]
+        )
+        for candidate_name, analysis in results["analyses"].items():
+            task = analysis["tasks"][task_name]
+            lines.append(
+                "| "
+                + candidate_name
+                + f" | {task['average_cost_mean']:.6f}"
+                + f" | {task['always_positive_cost_mean']:.6f}"
+                + f" | {task['always_negative_cost_mean']:.6f}"
+                + f" | {task['balanced_accuracy_mean']:.3f}"
+                + f" | {task['accuracy_mean']:.3f} |"
+            )
+        lines.append("")
+    return "\n".join(lines) + "\n"
 
 
 def render_criterion_markdown(results: dict) -> str:

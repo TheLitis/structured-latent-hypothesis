@@ -4,8 +4,11 @@ import math
 import unittest
 
 from structured_latent_hypothesis.transfer_criterion import (
+    evaluate_cost_sensitive_threshold,
     evaluate_router,
     leave_one_seed_out_router,
+    leave_one_seed_out_classifier,
+    select_cost_sensitive_threshold,
     select_threshold_router,
     spearman_correlation,
 )
@@ -76,6 +79,52 @@ class TransferCriterionTests(unittest.TestCase):
         self.assertEqual(len(metrics["per_seed"]), 2)
         self.assertLess(metrics["routed_rollout5_mse_mean"], metrics["always_full_rollout5_mse_mean"])
         self.assertTrue(0.0 <= metrics["accuracy_mean"] <= 1.0)
+
+    def test_cost_sensitive_threshold_prefers_low_scores_for_safe_positive(self) -> None:
+        rows = [
+            {"score_diag": 0.10, "task_safe": True},
+            {"score_diag": 0.15, "task_safe": True},
+            {"score_diag": 0.80, "task_safe": False},
+            {"score_diag": 0.85, "task_safe": False},
+        ]
+        selected = select_cost_sensitive_threshold(
+            rows,
+            "score_diag",
+            "task_safe",
+            false_positive_cost=3.0,
+            false_negative_cost=1.0,
+        )
+        self.assertEqual(selected["direction"], "low")
+        metrics = evaluate_cost_sensitive_threshold(
+            rows,
+            "score_diag",
+            "task_safe",
+            threshold=selected["threshold"],
+            direction=selected["direction"],
+            false_positive_cost=3.0,
+            false_negative_cost=1.0,
+        )
+        self.assertLess(metrics["average_cost"], metrics["always_positive_cost"])
+        self.assertLess(metrics["average_cost"], metrics["always_negative_cost"])
+
+    def test_leave_one_seed_out_classifier_aggregates_per_seed(self) -> None:
+        rows = [
+            {"seed": 1, "score_joint": 0.10, "task_budget": True},
+            {"seed": 1, "score_joint": 0.90, "task_budget": False},
+            {"seed": 2, "score_joint": 0.12, "task_budget": True},
+            {"seed": 2, "score_joint": 0.88, "task_budget": False},
+        ]
+        metrics = leave_one_seed_out_classifier(
+            rows,
+            "score_joint",
+            "task_budget",
+            false_positive_cost=3.0,
+            false_negative_cost=1.0,
+        )
+        self.assertEqual(len(metrics["per_seed"]), 2)
+        self.assertLess(metrics["average_cost_mean"], metrics["always_positive_cost_mean"])
+        self.assertLess(metrics["average_cost_mean"], metrics["always_negative_cost_mean"])
+        self.assertTrue(0.0 <= metrics["balanced_accuracy_mean"] <= 1.0)
 
 
 if __name__ == "__main__":
