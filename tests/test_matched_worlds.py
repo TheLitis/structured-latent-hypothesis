@@ -85,6 +85,23 @@ class MatchedWorldTest(unittest.TestCase):
         self.assertLess(values[1], values[2])
         self.assertEqual(ground_truth_coupling_strength("stepcurve_coupled_4.00_0.50"), 0.5)
 
+    def test_semireal_world_has_rgb_shape_and_valid_range(self) -> None:
+        world = generate_world("semireal_coupled_0.35", 8, 24)
+        self.assertEqual(world.shape, torch.Size([8, 8, 3, 24, 24]))
+        self.assertGreaterEqual(float(world.min().item()), 0.0)
+        self.assertLessEqual(float(world.max().item()), 1.0)
+
+    def test_semireal_commutator_increases_with_coupling(self) -> None:
+        values = [
+            ground_truth_commutator_magnitude("semireal_coupled_0.00", 6, 24),
+            ground_truth_commutator_magnitude("semireal_coupled_0.20", 6, 24),
+            ground_truth_commutator_magnitude("semireal_coupled_0.50", 6, 24),
+        ]
+        self.assertEqual(values[0], 0.0)
+        self.assertLess(values[0], values[1])
+        self.assertLess(values[1], values[2])
+        self.assertEqual(ground_truth_coupling_strength("semireal_coupled_0.35"), 0.35)
+
 
 if __name__ == "__main__":
     unittest.main()

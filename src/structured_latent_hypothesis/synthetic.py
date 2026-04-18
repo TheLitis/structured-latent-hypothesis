@@ -299,6 +299,180 @@ def parse_step_curve_coupled_world(world: str) -> tuple[float, float] | None:
     return float(gamma_text), float(alpha_text)
 
 
+def parse_semireal_coupled_world(world: str) -> float | None:
+    prefix = "semireal_coupled_"
+    if not world.startswith(prefix):
+        return None
+    return float(world[len(prefix) :])
+
+
+def scene_coords(size: int) -> tuple[torch.Tensor, torch.Tensor]:
+    coords = torch.linspace(-1.0, 1.0, size)
+    return torch.meshgrid(coords, coords, indexing="ij")
+
+
+def semireal_background(size: int) -> torch.Tensor:
+    yy, xx = scene_coords(size)
+    bg_r = 0.36 + 0.16 * (xx + 1.0) + 0.05 * torch.sin(2.5 * math.pi * yy)
+    bg_g = 0.30 + 0.12 * (yy + 1.0) + 0.05 * torch.cos(2.0 * math.pi * (xx - 0.35 * yy))
+    bg_b = 0.28 + 0.06 * torch.sin(3.5 * math.pi * (xx + yy)) + 0.04 * torch.cos(4.0 * math.pi * xx * yy)
+    floor = torch.sigmoid((yy - 0.18) * 8.0)
+    bg = torch.stack(
+        [
+            bg_r + 0.05 * floor,
+            bg_g + 0.04 * floor,
+            bg_b + 0.06 * floor,
+        ],
+        dim=0,
+    )
+    return bg.clamp(0.0, 1.0)
+
+
+def translate_tensor_x(image: torch.Tensor, shift: float) -> torch.Tensor:
+    channels = image.shape[0]
+    sample = image.unsqueeze(0)
+    theta = torch.tensor(
+        [
+            [1.0, 0.0, float(shift)],
+            [0.0, 1.0, 0.0],
+        ],
+        dtype=image.dtype,
+        device=image.device,
+    )
+    grid = nn.functional.affine_grid(theta.unsqueeze(0), torch.Size([1, channels, image.shape[-2], image.shape[-1]]), align_corners=False)
+    translated = nn.functional.grid_sample(
+        sample,
+        grid,
+        mode="bilinear",
+        padding_mode="zeros",
+        align_corners=False,
+    )
+    return translated.squeeze(0)
+
+
+def translate_scalar_x(image: torch.Tensor, shift: float) -> torch.Tensor:
+    return translate_tensor_x(image.unsqueeze(0), shift).squeeze(0)
+
+
+def semireal_occluder(size: int) -> torch.Tensor:
+    yy, xx = scene_coords(size)
+    band = torch.sigmoid((xx - 0.18) * 24.0) - torch.sigmoid((xx - 0.42) * 24.0)
+    taper = 0.55 + 0.45 * torch.sigmoid((yy + 0.10) * 10.0)
+    return (band * taper).clamp(0.0, 1.0)
+
+
+def semireal_sensor_pattern(size: int) -> torch.Tensor:
+    yy, xx = scene_coords(size)
+    pattern = torch.stack(
+        [
+            0.012 * torch.sin(5.0 * math.pi * xx + 1.2 * yy),
+            0.010 * torch.cos(4.0 * math.pi * yy - 0.7 * xx),
+            0.011 * torch.sin(3.0 * math.pi * (xx + yy)),
+        ],
+        dim=0,
+    )
+    return pattern
+
+
+def semireal_foreground_layers(
+    size: int,
+    shift: float,
+    phase: float,
+    coupling: float,
+    use_scene_coords: bool = True,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    yy, xx = scene_coords(size)
+    x_local = xx - float(shift)
+    y_local = yy - 0.12
+    primary = torch.exp(-((x_local / 0.34) ** 2 + (y_local / 0.24) ** 2) * 3.5)
+    wing = 0.65 * torch.exp(-(((x_local + 0.18) / 0.20) ** 2 + ((y_local + 0.03) / 0.15) ** 2) * 5.0)
+    cutout = 0.25 * torch.exp(-(((x_local - 0.16) / 0.13) ** 2 + ((y_local + 0.12) / 0.10) ** 2) * 8.0)
+    mask = (primary + wing - cutout).clamp(0.0, 1.0)
+    mask = torch.sigmoid((mask - 0.32) * 12.0)
+
+    stripe = 0.5 + 0.5 * torch.sin(7.0 * math.pi * x_local + 3.0 * y_local + 2.6 * float(phase))
+    weave = 0.5 + 0.5 * torch.cos(5.0 * math.pi * (x_local - 0.6 * y_local) - 1.4 * float(phase))
+    texture = (0.58 * stripe + 0.42 * weave).clamp(0.0, 1.0)
+
+    warm = torch.tensor(
+        [
+            0.78 + 0.10 * float(phase),
+            0.54 - 0.05 * float(phase),
+            0.34 - 0.07 * float(phase),
+        ],
+        dtype=yy.dtype,
+    ).view(3, 1, 1)
+    cool = torch.tensor(
+        [
+            0.30 - 0.04 * float(phase),
+            0.52 + 0.06 * float(phase),
+            0.76 + 0.10 * float(phase),
+        ],
+        dtype=yy.dtype,
+    ).view(3, 1, 1)
+    palette_mix = 0.5 + 0.5 * torch.tanh(torch.tensor(float(phase) * 1.3, dtype=yy.dtype))
+    base_rgb = palette_mix * warm + (1.0 - palette_mix) * cool
+    local_highlight = torch.exp(-(((x_local + 0.06) / 0.18) ** 2 + ((y_local + 0.12) / 0.10) ** 2) * 4.0)
+    object_rgb = base_rgb * (0.62 + 0.38 * texture).unsqueeze(0) + 0.12 * local_highlight.unsqueeze(0)
+
+    lighting_coords = xx if use_scene_coords else x_local
+    lighting = 1.0 + float(coupling) * float(phase) * (0.55 * lighting_coords + 0.18 * torch.sin(2.5 * math.pi * yy))
+    object_rgb = (object_rgb * lighting.unsqueeze(0)).clamp(0.0, 1.0)
+
+    shadow = torch.exp(-((((x_local + 0.07) / 0.36) ** 2) + (((y_local + 0.07) / 0.19) ** 2)) * 3.0)
+    shadow = 0.32 * shadow * mask
+    shadow = nn.functional.avg_pool2d(shadow.unsqueeze(0).unsqueeze(0), kernel_size=3, stride=1, padding=1).squeeze(0).squeeze(0)
+    return object_rgb, mask, shadow.clamp(0.0, 1.0)
+
+
+def compose_semireal_scene(background: torch.Tensor, object_rgb: torch.Tensor, mask: torch.Tensor, shadow: torch.Tensor) -> torch.Tensor:
+    occluder = semireal_occluder(background.shape[-1])
+    scene = background * (1.0 - 0.35 * shadow.unsqueeze(0))
+    scene = scene * (1.0 - mask.unsqueeze(0)) + object_rgb * mask.unsqueeze(0)
+    scene = scene * (1.0 - 0.18 * occluder.unsqueeze(0)) + 0.04 * occluder.unsqueeze(0)
+    scene = (scene + semireal_sensor_pattern(background.shape[-1])).clamp(0.0, 1.0)
+    return scene
+
+
+def semireal_scene(size: int, shift: float, phase: float, coupling: float) -> torch.Tensor:
+    background = semireal_background(size)
+    object_rgb, mask, shadow = semireal_foreground_layers(size, shift, phase, coupling, use_scene_coords=True)
+    return compose_semireal_scene(background, object_rgb, mask, shadow)
+
+
+def semireal_world(grid_size: int, image_size: int, coupling: float) -> torch.Tensor:
+    shifts = torch.linspace(-0.55, 0.55, grid_size)
+    phases = torch.linspace(-1.0, 1.0, grid_size)
+    world = []
+    for shift in shifts.tolist():
+        row = []
+        for phase in phases.tolist():
+            row.append(semireal_scene(image_size, shift, phase, coupling))
+        world.append(torch.stack(row))
+    return torch.stack(world)
+
+
+def semireal_commutator_magnitude(grid_size: int, image_size: int, coupling: float) -> float:
+    if abs(float(coupling)) < 1e-12:
+        return 0.0
+    background = semireal_background(image_size)
+    shifts = torch.linspace(-0.55, 0.55, grid_size)
+    phases = torch.linspace(-1.0, 1.0, grid_size)
+    diffs = []
+    for shift in shifts.tolist():
+        for phase in phases.tolist():
+            object_ab, mask_ab, shadow_ab = semireal_foreground_layers(image_size, shift, phase, coupling, use_scene_coords=True)
+            scene_ab = compose_semireal_scene(background, object_ab, mask_ab, shadow_ab)
+
+            object_ba, mask_ba, shadow_ba = semireal_foreground_layers(image_size, 0.0, phase, coupling, use_scene_coords=False)
+            shifted_object = translate_tensor_x(object_ba, shift)
+            shifted_mask = translate_scalar_x(mask_ba, shift)
+            shifted_shadow = translate_scalar_x(shadow_ba, shift)
+            scene_ba = compose_semireal_scene(background, shifted_object, shifted_mask, shifted_shadow)
+            diffs.append(float((scene_ab - scene_ba).pow(2).mean().item()))
+    return mean(diffs)
+
+
 def generate_world(world: str, grid_size: int, image_size: int) -> torch.Tensor:
     base = build_base_pattern(image_size)
     matched_world = parse_matched_world(world)
@@ -322,6 +496,9 @@ def generate_world(world: str, grid_size: int, image_size: int) -> torch.Tensor:
     step_curve = parse_step_curve_world(world)
     if step_curve is not None:
         return shift_brightness_curve_world(base, grid_size, gamma=step_curve)
+    semireal_coupled = parse_semireal_coupled_world(world)
+    if semireal_coupled is not None:
+        return semireal_world(grid_size, image_size, semireal_coupled)
     if world == "commutative":
         return shift_brightness_world(base, grid_size)
     if world == "noncommutative":
@@ -363,6 +540,9 @@ def ground_truth_commutator_magnitude(world: str, grid_size: int, image_size: in
             return mean(diffs)
         if parse_step_curve_world(world) is not None:
             return 0.0
+        semireal_coupled = parse_semireal_coupled_world(world)
+        if semireal_coupled is not None:
+            return semireal_commutator_magnitude(grid_size, image_size, semireal_coupled)
         return None
 
     family, matched_strength = matched_world
@@ -420,6 +600,8 @@ def ground_truth_step_drift_magnitude(world: str, grid_size: int) -> float | Non
     if gamma is None:
         gamma = parse_step_curve_path_world(world)
     if gamma is None:
+        if parse_semireal_coupled_world(world) is not None:
+            return None
         return None
     brightness = brightness_curve(grid_size, gamma=gamma)
     diffs = brightness[1:] - brightness[:-1]
@@ -431,6 +613,9 @@ def ground_truth_coupling_strength(world: str) -> float | None:
     if step_curve_coupled is not None:
         _, interaction = step_curve_coupled
         return float(interaction)
+    semireal_coupled = parse_semireal_coupled_world(world)
+    if semireal_coupled is not None:
+        return float(semireal_coupled)
     if parse_step_curve_path_world(world) is not None:
         return 0.22
     if parse_step_curve_world(world) is not None:
