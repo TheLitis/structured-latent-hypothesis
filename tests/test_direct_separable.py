@@ -3,6 +3,8 @@ import unittest
 import torch
 
 from structured_latent_hypothesis.direct_separable import (
+    AdditiveCurvatureFieldDecoder,
+    AdditiveHankelDefectDecoder,
     AdditiveLatentDecoder,
     AdditiveInteractionMLPDecoder,
     AdditiveLowRankDecoder,
@@ -10,6 +12,7 @@ from structured_latent_hypothesis.direct_separable import (
     AdditiveOperatorDecoder,
     CoordLatentDecoder,
     DirectBenchmarkConfig,
+    mixed_difference,
     train_direct_with_nested_selection,
     train_one_direct,
 )
@@ -57,6 +60,40 @@ class DirectSeparableTest(unittest.TestCase):
         self.assertLess(float(residual.mean(dim=0).abs().max().item()), 1e-6)
         self.assertLess(float(residual.mean(dim=1).abs().max().item()), 1e-6)
 
+    def test_curvature_field_mixed_difference_matches_kappa(self) -> None:
+        model = AdditiveCurvatureFieldDecoder(grid_size=6, latent_dim=4, hidden_dim=24, output_dim=16, interaction_rank=2)
+        interaction = model.residual_grid()
+        kappa = model.regularizer_grid()
+        self.assertEqual(interaction.shape, torch.Size([6, 6, 4]))
+        self.assertEqual(kappa.shape, torch.Size([5, 5, 4]))
+        self.assertLess(float((mixed_difference(interaction) - kappa).abs().max().item()), 1e-6)
+
+    def test_curvature_field_zero_kappa_gives_zero_interaction(self) -> None:
+        model = AdditiveCurvatureFieldDecoder(grid_size=6, latent_dim=4, hidden_dim=24, output_dim=16, interaction_rank=2)
+        with torch.no_grad():
+            model.curv_basis.zero_()
+        interaction = model.residual_grid()
+        base = model.row[:, None, :] + model.col[None, :, :]
+        self.assertLess(float(interaction.abs().max().item()), 1e-9)
+        self.assertLess(float((model.latent_grid() - base).abs().max().item()), 1e-9)
+
+    def test_hankel_defect_mixed_difference_matches_regularizer(self) -> None:
+        model = AdditiveHankelDefectDecoder(grid_size=6, latent_dim=4, hidden_dim=24, output_dim=16, interaction_rank=2)
+        interaction = model.residual_grid()
+        kappa = model.regularizer_grid()
+        self.assertEqual(interaction.shape, torch.Size([6, 6, 4]))
+        self.assertEqual(kappa.shape, torch.Size([5, 5, 4]))
+        self.assertLess(float((mixed_difference(interaction) - kappa).abs().max().item()), 1e-6)
+
+    def test_hankel_defect_zero_second_difference_gives_zero_interaction(self) -> None:
+        model = AdditiveHankelDefectDecoder(grid_size=6, latent_dim=4, hidden_dim=24, output_dim=16, interaction_rank=2)
+        with torch.no_grad():
+            model.diag_second_diff.zero_()
+        interaction = model.residual_grid()
+        base = model.row[:, None, :] + model.col[None, :, :]
+        self.assertLess(float(interaction.abs().max().item()), 1e-9)
+        self.assertLess(float((model.latent_grid() - base).abs().max().item()), 1e-9)
+
     def test_additive_model_generalizes_better_than_cell_latent_on_stepcurve_world(self) -> None:
         shared = {
             "world": "stepcurve_1.00",
@@ -99,6 +136,26 @@ class DirectSeparableTest(unittest.TestCase):
         self.assertIn(result["selection"]["chosen_candidate"], {"l001", "l050"})
         self.assertEqual(len(result["selection"]["scores"]), 2)
         self.assertGreater(result["selection"]["realized_inner_train_fraction"], 0.0)
+
+    def test_curvature_field_train_one_direct_smoke(self) -> None:
+        config = DirectBenchmarkConfig(
+            world="stepcurve_coupled_4.00_0.50",
+            variant="curvature",
+            seed=3,
+            model_type="additive_curvature_field",
+            grid_size=6,
+            image_size=12,
+            latent_dim=4,
+            hidden_dim=48,
+            train_fraction=0.78,
+            epochs=60,
+            interaction_rank=2,
+            lambda_residual=0.01,
+        )
+        result = train_one_direct(config)
+        self.assertGreaterEqual(result["final_losses"]["residual_loss"], 0.0)
+        self.assertEqual(torch.tensor(result["residual_norm_grid"]).shape, torch.Size([6, 6]))
+        self.assertTrue(torch.isfinite(torch.tensor(result["test_recon_mse"])))
 
 
 if __name__ == "__main__":
