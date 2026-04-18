@@ -2,7 +2,12 @@ import unittest
 
 import torch
 
-from structured_latent_hypothesis.synthetic import generate_world, ground_truth_commutator_magnitude, ground_truth_step_drift_magnitude
+from structured_latent_hypothesis.synthetic import (
+    generate_world,
+    ground_truth_commutator_magnitude,
+    ground_truth_coupling_strength,
+    ground_truth_step_drift_magnitude,
+)
 
 
 class MatchedWorldTest(unittest.TestCase):
@@ -24,6 +29,11 @@ class MatchedWorldTest(unittest.TestCase):
     def test_step_curve_gamma_one_matches_commutative_world(self) -> None:
         reference = generate_world("commutative", 8, 20)
         candidate = generate_world("stepcurve_1.00", 8, 20)
+        self.assertTrue(torch.allclose(reference, candidate))
+
+    def test_step_curve_coupled_zero_matches_stepcurve_world(self) -> None:
+        reference = generate_world("stepcurve_4.00", 8, 20)
+        candidate = generate_world("stepcurve_coupled_4.00_0.00", 8, 20)
         self.assertTrue(torch.allclose(reference, candidate))
 
     def test_ramp_commutator_magnitude_increases_with_strength(self) -> None:
@@ -63,6 +73,17 @@ class MatchedWorldTest(unittest.TestCase):
         self.assertGreater(float(ground_truth_step_drift_magnitude("stepcurve_2.00", 8)), 0.0)
         self.assertGreater(float(ground_truth_commutator_magnitude("stepcurve_path_1.00", 8, 20)), 0.0)
         self.assertGreater(float(ground_truth_step_drift_magnitude("stepcurve_path_2.00", 8)), 0.0)
+
+    def test_step_curve_coupled_commutator_increases_with_interaction(self) -> None:
+        values = [
+            ground_truth_commutator_magnitude("stepcurve_coupled_4.00_0.00", 8, 20),
+            ground_truth_commutator_magnitude("stepcurve_coupled_4.00_0.20", 8, 20),
+            ground_truth_commutator_magnitude("stepcurve_coupled_4.00_0.50", 8, 20),
+        ]
+        self.assertEqual(values[0], 0.0)
+        self.assertLess(values[0], values[1])
+        self.assertLess(values[1], values[2])
+        self.assertEqual(ground_truth_coupling_strength("stepcurve_coupled_4.00_0.50"), 0.5)
 
 
 if __name__ == "__main__":

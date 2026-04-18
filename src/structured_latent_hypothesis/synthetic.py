@@ -290,6 +290,15 @@ def parse_step_curve_path_world(world: str) -> float | None:
     return None
 
 
+def parse_step_curve_coupled_world(world: str) -> tuple[float, float] | None:
+    prefix = "stepcurve_coupled_"
+    if not world.startswith(prefix):
+        return None
+    rest = world[len(prefix) :]
+    gamma_text, alpha_text = rest.split("_", maxsplit=1)
+    return float(gamma_text), float(alpha_text)
+
+
 def generate_world(world: str, grid_size: int, image_size: int) -> torch.Tensor:
     base = build_base_pattern(image_size)
     matched_world = parse_matched_world(world)
@@ -301,6 +310,12 @@ def generate_world(world: str, grid_size: int, image_size: int) -> torch.Tensor:
             return matched_shift_scale_world(base, grid_size, matched_strength)
         if family == "rotation":
             return matched_shift_rotation_world(base, grid_size, matched_strength)
+    step_curve_coupled = parse_step_curve_coupled_world(world)
+    if step_curve_coupled is not None:
+        gamma, interaction = step_curve_coupled
+        if abs(interaction) < 1e-12:
+            return shift_brightness_curve_world(base, grid_size, gamma=gamma)
+        return shift_brightness_curve_path_world(base, grid_size, gamma=gamma, interaction=interaction)
     step_curve_path = parse_step_curve_path_world(world)
     if step_curve_path is not None:
         return shift_brightness_curve_path_world(base, grid_size, gamma=step_curve_path)
@@ -317,6 +332,22 @@ def generate_world(world: str, grid_size: int, image_size: int) -> torch.Tensor:
 def ground_truth_commutator_magnitude(world: str, grid_size: int, image_size: int) -> float | None:
     matched_world = parse_matched_world(world)
     if matched_world is None:
+        step_curve_coupled = parse_step_curve_coupled_world(world)
+        if step_curve_coupled is not None:
+            gamma, interaction = step_curve_coupled
+            if abs(interaction) < 1e-12:
+                return 0.0
+            base = build_base_pattern(image_size)
+            shifts = torch.round(torch.linspace(-3.0, 3.0, grid_size)).to(torch.int64)
+            phases = phase_coordinates(grid_size)
+            brightness = brightness_curve(grid_size, gamma=gamma)
+            diffs = []
+            for shift in shifts.tolist():
+                for phase, scale in zip(phases.tolist(), brightness.tolist()):
+                    ab = apply_phase_ramp_operator(apply_shift(base, int(shift)), float(scale), float(phase), interaction)
+                    ba = apply_shift(apply_phase_ramp_operator(base, float(scale), float(phase), interaction), int(shift))
+                    diffs.append(float((ab - ba).pow(2).mean().item()))
+            return mean(diffs)
         step_curve_path = parse_step_curve_path_world(world)
         if step_curve_path is not None:
             base = build_base_pattern(image_size)
@@ -379,6 +410,12 @@ def ground_truth_commutator_magnitude(world: str, grid_size: int, image_size: in
 
 
 def ground_truth_step_drift_magnitude(world: str, grid_size: int) -> float | None:
+    step_curve_coupled = parse_step_curve_coupled_world(world)
+    if step_curve_coupled is not None:
+        gamma, _ = step_curve_coupled
+        brightness = brightness_curve(grid_size, gamma=gamma)
+        diffs = brightness[1:] - brightness[:-1]
+        return float((diffs - diffs.mean()).pow(2).mean().item())
     gamma = parse_step_curve_world(world)
     if gamma is None:
         gamma = parse_step_curve_path_world(world)
@@ -387,6 +424,18 @@ def ground_truth_step_drift_magnitude(world: str, grid_size: int) -> float | Non
     brightness = brightness_curve(grid_size, gamma=gamma)
     diffs = brightness[1:] - brightness[:-1]
     return float((diffs - diffs.mean()).pow(2).mean().item())
+
+
+def ground_truth_coupling_strength(world: str) -> float | None:
+    step_curve_coupled = parse_step_curve_coupled_world(world)
+    if step_curve_coupled is not None:
+        _, interaction = step_curve_coupled
+        return float(interaction)
+    if parse_step_curve_path_world(world) is not None:
+        return 0.22
+    if parse_step_curve_world(world) is not None:
+        return 0.0
+    return None
 
 
 def cartesian_block_train_mask(grid_size: int, row_phase: int = 0, col_phase: int = 0) -> torch.Tensor:

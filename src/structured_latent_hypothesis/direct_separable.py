@@ -9,7 +9,15 @@ from typing import Any
 import torch
 from torch import nn
 
-from .synthetic import generate_world, sample_nested_train_mask, sample_train_mask, set_seed
+from .synthetic import (
+    generate_world,
+    ground_truth_commutator_magnitude,
+    ground_truth_coupling_strength,
+    ground_truth_step_drift_magnitude,
+    sample_nested_train_mask,
+    sample_train_mask,
+    set_seed,
+)
 
 
 @dataclass
@@ -324,8 +332,6 @@ def run_direct_benchmark_suite(
     train_fraction: float = 0.78,
     epochs: int = 280,
 ) -> dict[str, Any]:
-    from .synthetic import ground_truth_commutator_magnitude, ground_truth_step_drift_magnitude
-
     raw_runs: list[dict[str, Any]] = []
     summary: dict[str, Any] = {}
 
@@ -372,6 +378,7 @@ def run_direct_benchmark_suite(
             world: {
                 "ground_truth_commutator": ground_truth_commutator_magnitude(world, grid_size, image_size),
                 "ground_truth_step_drift": ground_truth_step_drift_magnitude(world, grid_size),
+                "ground_truth_coupling_strength": ground_truth_coupling_strength(world),
             }
             for world in worlds
         },
