@@ -5,6 +5,7 @@ import torch
 from structured_latent_hypothesis.direct_separable import (
     AdditiveCurvatureFieldDecoder,
     AdditiveCurvatureHankelDecoder,
+    AdditiveCurvatureHankelCoordAdapterDecoder,
     AdditiveHankelDefectDecoder,
     AdditiveLatentDecoder,
     AdditiveInteractionMLPDecoder,
@@ -111,6 +112,23 @@ class DirectSeparableTest(unittest.TestCase):
         self.assertEqual(regularizer.shape, torch.Size([5, 5, 8]))
         self.assertTrue(torch.isfinite(regularizer).all())
 
+    def test_curvature_hankel_coord_adapter_zero_components_gives_zero_interaction(self) -> None:
+        model = AdditiveCurvatureHankelCoordAdapterDecoder(grid_size=6, latent_dim=4, hidden_dim=24, output_dim=16, interaction_rank=2)
+        with torch.no_grad():
+            model.curv_basis.zero_()
+            model.diag_second_diff.zero_()
+            model.adapter_logit.fill_(-30.0)
+        interaction = model.residual_grid()
+        base = model.row[:, None, :] + model.col[None, :, :]
+        self.assertLess(float(interaction.abs().max().item()), 1e-6)
+        self.assertLess(float((model.latent_grid() - base).abs().max().item()), 1e-6)
+
+    def test_curvature_hankel_coord_adapter_regularizer_has_expected_shape(self) -> None:
+        model = AdditiveCurvatureHankelCoordAdapterDecoder(grid_size=6, latent_dim=4, hidden_dim=24, output_dim=16, interaction_rank=2)
+        regularizer = model.regularizer_grid()
+        self.assertEqual(regularizer.shape, torch.Size([5, 5, 12]))
+        self.assertTrue(torch.isfinite(regularizer).all())
+
     def test_additive_model_generalizes_better_than_cell_latent_on_stepcurve_world(self) -> None:
         shared = {
             "world": "stepcurve_1.00",
@@ -180,6 +198,26 @@ class DirectSeparableTest(unittest.TestCase):
             variant="curv_hankel",
             seed=3,
             model_type="additive_curvature_hankel",
+            grid_size=6,
+            image_size=12,
+            latent_dim=4,
+            hidden_dim=48,
+            train_fraction=0.78,
+            epochs=60,
+            interaction_rank=2,
+            lambda_residual=0.01,
+        )
+        result = train_one_direct(config)
+        self.assertGreaterEqual(result["final_losses"]["residual_loss"], 0.0)
+        self.assertEqual(torch.tensor(result["residual_norm_grid"]).shape, torch.Size([6, 6]))
+        self.assertTrue(torch.isfinite(torch.tensor(result["test_recon_mse"])))
+
+    def test_curvature_hankel_coord_adapter_train_one_direct_smoke(self) -> None:
+        config = DirectBenchmarkConfig(
+            world="stepcurve_coupled_4.00_0.50",
+            variant="curv_hankel_coord",
+            seed=3,
+            model_type="additive_curvature_hankel_coord",
             grid_size=6,
             image_size=12,
             latent_dim=4,
