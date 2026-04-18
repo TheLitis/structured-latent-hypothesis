@@ -35,6 +35,7 @@ class DirectBenchmarkConfig:
     epochs: int = 280
     lr: float = 3e-3
     lambda_residual: float = 0.0
+    interaction_rank: int = 0
 
 
 class SharedDecoder(nn.Module):
@@ -130,6 +131,41 @@ class AdditiveLatentDecoder(nn.Module):
         return recon, latents, self.residual_grid()
 
 
+class AdditiveLowRankDecoder(nn.Module):
+    def __init__(self, grid_size: int, latent_dim: int, hidden_dim: int, output_dim: int, interaction_rank: int) -> None:
+        super().__init__()
+        if interaction_rank <= 0:
+            raise ValueError("interaction_rank must be positive for AdditiveLowRankDecoder.")
+        self.row = nn.Parameter(torch.empty(grid_size, latent_dim))
+        self.col = nn.Parameter(torch.empty(grid_size, latent_dim))
+        self.row_scores = nn.Parameter(torch.empty(grid_size, interaction_rank))
+        self.col_scores = nn.Parameter(torch.empty(grid_size, interaction_rank))
+        self.basis = nn.Parameter(torch.empty(interaction_rank, latent_dim))
+        nn.init.normal_(self.row, mean=0.0, std=0.02)
+        nn.init.normal_(self.col, mean=0.0, std=0.02)
+        nn.init.normal_(self.row_scores, mean=0.0, std=0.02)
+        nn.init.normal_(self.col_scores, mean=0.0, std=0.02)
+        nn.init.normal_(self.basis, mean=0.0, std=0.02)
+        self.decoder = SharedDecoder(latent_dim, hidden_dim, output_dim)
+
+    def low_rank_residual(self) -> torch.Tensor:
+        row_scores = self.row_scores - self.row_scores.mean(dim=0, keepdim=True)
+        col_scores = self.col_scores - self.col_scores.mean(dim=0, keepdim=True)
+        return torch.einsum("ir,jr,rd->ijd", row_scores, col_scores, self.basis)
+
+    def latent_grid(self) -> torch.Tensor:
+        base = self.row[:, None, :] + self.col[None, :, :]
+        return base + self.low_rank_residual()
+
+    def residual_grid(self) -> torch.Tensor:
+        return self.low_rank_residual()
+
+    def forward(self) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        latents = self.latent_grid()
+        recon = self.decoder(latents.reshape(-1, latents.shape[-1])).reshape(latents.shape[0], latents.shape[1], -1)
+        return recon, latents, self.residual_grid()
+
+
 def build_model(config: DirectBenchmarkConfig, output_dim: int) -> nn.Module:
     if config.model_type == "coord":
         return CoordLatentDecoder(config.grid_size, config.latent_dim, config.hidden_dim, output_dim)
@@ -139,6 +175,14 @@ def build_model(config: DirectBenchmarkConfig, output_dim: int) -> nn.Module:
         return AdditiveLatentDecoder(config.grid_size, config.latent_dim, config.hidden_dim, output_dim, use_residual=False)
     if config.model_type == "additive_residual":
         return AdditiveLatentDecoder(config.grid_size, config.latent_dim, config.hidden_dim, output_dim, use_residual=True)
+    if config.model_type == "additive_low_rank":
+        return AdditiveLowRankDecoder(
+            config.grid_size,
+            config.latent_dim,
+            config.hidden_dim,
+            output_dim,
+            interaction_rank=config.interaction_rank,
+        )
     raise ValueError(f"Unsupported model_type: {config.model_type}")
 
 

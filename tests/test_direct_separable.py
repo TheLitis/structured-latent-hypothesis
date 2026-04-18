@@ -4,6 +4,7 @@ import torch
 
 from structured_latent_hypothesis.direct_separable import (
     AdditiveLatentDecoder,
+    AdditiveLowRankDecoder,
     CoordLatentDecoder,
     DirectBenchmarkConfig,
     train_direct_with_nested_selection,
@@ -24,6 +25,13 @@ class DirectSeparableTest(unittest.TestCase):
         self.assertEqual(recon.shape, torch.Size([6, 6, 16]))
         self.assertEqual(latent.shape, torch.Size([6, 6, 4]))
         self.assertLess(float(residual.abs().max().item()), 1e-12)
+
+    def test_low_rank_decoder_centers_interaction_main_effects(self) -> None:
+        model = AdditiveLowRankDecoder(grid_size=6, latent_dim=4, hidden_dim=24, output_dim=16, interaction_rank=2)
+        residual = model.residual_grid()
+        self.assertEqual(residual.shape, torch.Size([6, 6, 4]))
+        self.assertLess(float(residual.mean(dim=0).abs().max().item()), 1e-6)
+        self.assertLess(float(residual.mean(dim=1).abs().max().item()), 1e-6)
 
     def test_additive_model_generalizes_better_than_cell_latent_on_stepcurve_world(self) -> None:
         shared = {
