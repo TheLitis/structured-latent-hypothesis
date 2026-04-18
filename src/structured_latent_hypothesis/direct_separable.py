@@ -45,6 +45,35 @@ class SharedDecoder(nn.Module):
         return self.net(latents)
 
 
+class CoordLatentDecoder(nn.Module):
+    def __init__(self, grid_size: int, latent_dim: int, hidden_dim: int, output_dim: int) -> None:
+        super().__init__()
+        axis = torch.linspace(-1.0, 1.0, steps=grid_size)
+        yy, xx = torch.meshgrid(axis, axis, indexing="ij")
+        self.register_buffer("coords", torch.stack([yy, xx], dim=-1))
+        self.coord_net = nn.Sequential(
+            nn.Linear(2, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, latent_dim),
+        )
+        self.decoder = SharedDecoder(latent_dim, hidden_dim, output_dim)
+
+    def latent_grid(self) -> torch.Tensor:
+        coords = self.coords.reshape(-1, 2)
+        return self.coord_net(coords).reshape(self.coords.shape[0], self.coords.shape[1], -1)
+
+    def residual_grid(self) -> torch.Tensor:
+        latent = self.latent_grid()
+        return torch.zeros_like(latent)
+
+    def forward(self) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        latents = self.latent_grid()
+        recon = self.decoder(latents.reshape(-1, latents.shape[-1])).reshape(latents.shape[0], latents.shape[1], -1)
+        return recon, latents, self.residual_grid()
+
+
 class CellLatentDecoder(nn.Module):
     def __init__(self, grid_size: int, latent_dim: int, hidden_dim: int, output_dim: int) -> None:
         super().__init__()
@@ -94,6 +123,8 @@ class AdditiveLatentDecoder(nn.Module):
 
 
 def build_model(config: DirectBenchmarkConfig, output_dim: int) -> nn.Module:
+    if config.model_type == "coord":
+        return CoordLatentDecoder(config.grid_size, config.latent_dim, config.hidden_dim, output_dim)
     if config.model_type == "cell":
         return CellLatentDecoder(config.grid_size, config.latent_dim, config.hidden_dim, output_dim)
     if config.model_type == "additive":
@@ -215,10 +246,12 @@ def train_direct_with_nested_selection(
 
     final_config = replace(config, **best_recipe)
     final_run = train_one_direct(final_config, train_mask_override=outer_train_mask)
+    realized_fraction = float(inner_train_mask.sum().item()) / float(max(1, outer_train_mask.sum().item()))
     final_run["selection"] = {
         "mode": "nested",
         "metric": selection_metric,
         "inner_train_fraction": inner_train_fraction,
+        "realized_inner_train_fraction": realized_fraction,
         "chosen_candidate": best_name,
         "chosen_recipe": best_recipe,
         "scores": selection_scores,

@@ -433,28 +433,53 @@ def sample_nested_train_mask(base_mask: torch.Tensor, seed: int, keep_fraction: 
     base_rows = base_mask.sum(dim=1)
     base_cols = base_mask.sum(dim=0)
     total_base = int(base_mask.sum().item())
+    target_train = min(total_base - 1, max(1, int(round(total_base * keep_fraction))))
     min_validation = max(4, int(round(total_base * (1.0 - keep_fraction))))
     min_cells = max(4, int(0.18 * max(1, int(cell_mask(base_mask).sum().item()))))
 
-    phases = [(row_phase, col_phase) for row_phase in range(4) for col_phase in range(4)]
-    offset = seed % len(phases)
-    for index in range(len(phases)):
-        row_phase, col_phase = phases[(index + offset) % len(phases)]
-        if row_phase == 0 and col_phase == 0:
-            continue
-
-        selector = cartesian_block_train_mask(grid_size, row_phase=row_phase, col_phase=col_phase)
-        proposal = base_mask & selector
+    def is_valid(proposal: torch.Tensor) -> bool:
         validation_points = int((base_mask & ~proposal).sum().item())
         if validation_points < min_validation:
-            continue
+            return False
         if torch.any(proposal.sum(dim=1)[base_rows > 0] < 2):
-            continue
+            return False
         if torch.any(proposal.sum(dim=0)[base_cols > 0] < 2):
-            continue
+            return False
         if int(cell_mask(proposal).sum().item()) < min_cells:
+            return False
+        return True
+
+    candidates: list[tuple[int, int, torch.Tensor]] = []
+    phases = [(row_phase, col_phase) for row_phase in range(4) for col_phase in range(4)]
+    for phase_index, (row_phase, col_phase) in enumerate(phases):
+        if row_phase == 0 and col_phase == 0:
             continue
-        return proposal
+        selector = cartesian_block_train_mask(grid_size, row_phase=row_phase, col_phase=col_phase)
+        proposal = base_mask & selector
+        if not is_valid(proposal):
+            continue
+        distance = abs(int(proposal.sum().item()) - target_train)
+        candidates.append((distance, phase_index, proposal))
+
+    if not candidates:
+        generator = torch.Generator()
+        generator.manual_seed(seed)
+        target_train = min(total_base - min_validation, target_train)
+        base_positions = base_mask.nonzero(as_tuple=False)
+        if target_train <= 0 or target_train >= total_base:
+            raise RuntimeError("Nested selection target is incompatible with the outer train mask.")
+        for attempt in range(128):
+            order = torch.rand(base_positions.shape[0], generator=generator).argsort(descending=True)
+            chosen = base_positions[order[:target_train]]
+            proposal = torch.zeros_like(base_mask)
+            proposal[chosen[:, 0], chosen[:, 1]] = True
+            if not is_valid(proposal):
+                continue
+            candidates.append((0, len(phases) + attempt, proposal))
+
+    if candidates:
+        _, _, best = min(candidates, key=lambda item: (item[0], item[1]))
+        return best
 
     raise RuntimeError("Failed to sample a usable nested inner-train mask.")
 
@@ -679,10 +704,12 @@ def train_with_nested_selection(
 
     final_config = replace(config, **best_recipe)
     final_run = train_one(final_config, train_mask_override=outer_train_mask)
+    realized_fraction = float(inner_train_mask.sum().item()) / float(max(1, outer_train_mask.sum().item()))
     final_run["selection"] = {
         "mode": "nested",
         "metric": selection_metric,
         "inner_train_fraction": inner_train_fraction,
+        "realized_inner_train_fraction": realized_fraction,
         "chosen_candidate": best_name,
         "chosen_recipe": best_recipe,
         "scores": selection_scores,
