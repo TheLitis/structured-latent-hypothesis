@@ -166,6 +166,115 @@ class AdditiveLowRankDecoder(nn.Module):
         return recon, latents, self.residual_grid()
 
 
+class AdditiveInteractionMLPDecoder(nn.Module):
+    def __init__(self, grid_size: int, latent_dim: int, hidden_dim: int, output_dim: int, interaction_rank: int) -> None:
+        super().__init__()
+        if interaction_rank <= 0:
+            raise ValueError("interaction_rank must be positive for AdditiveInteractionMLPDecoder.")
+        self.row = nn.Parameter(torch.empty(grid_size, latent_dim))
+        self.col = nn.Parameter(torch.empty(grid_size, latent_dim))
+        self.row_interaction = nn.Parameter(torch.empty(grid_size, interaction_rank))
+        self.col_interaction = nn.Parameter(torch.empty(grid_size, interaction_rank))
+        nn.init.normal_(self.row, mean=0.0, std=0.02)
+        nn.init.normal_(self.col, mean=0.0, std=0.02)
+        nn.init.normal_(self.row_interaction, mean=0.0, std=0.02)
+        nn.init.normal_(self.col_interaction, mean=0.0, std=0.02)
+        interaction_hidden = max(16, hidden_dim // 2)
+        self.interaction_net = nn.Sequential(
+            nn.Linear(interaction_rank * 2, interaction_hidden),
+            nn.ReLU(),
+            nn.Linear(interaction_hidden, latent_dim),
+        )
+        self.decoder = SharedDecoder(latent_dim, hidden_dim, output_dim)
+
+    def interaction_residual(self) -> torch.Tensor:
+        row_codes = self.row_interaction[:, None, :].expand(-1, self.col_interaction.shape[0], -1)
+        col_codes = self.col_interaction[None, :, :].expand(self.row_interaction.shape[0], -1, -1)
+        raw = self.interaction_net(torch.cat([row_codes, col_codes], dim=-1))
+        row_mean = raw.mean(dim=1, keepdim=True)
+        col_mean = raw.mean(dim=0, keepdim=True)
+        grand_mean = raw.mean(dim=(0, 1), keepdim=True)
+        return raw - row_mean - col_mean + grand_mean
+
+    def latent_grid(self) -> torch.Tensor:
+        base = self.row[:, None, :] + self.col[None, :, :]
+        return base + self.interaction_residual()
+
+    def residual_grid(self) -> torch.Tensor:
+        return self.interaction_residual()
+
+    def forward(self) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        latents = self.latent_grid()
+        recon = self.decoder(latents.reshape(-1, latents.shape[-1])).reshape(latents.shape[0], latents.shape[1], -1)
+        return recon, latents, self.residual_grid()
+
+
+class AdditiveOperatorDecoder(nn.Module):
+    def __init__(self, grid_size: int, latent_dim: int, hidden_dim: int, output_dim: int, interaction_rank: int) -> None:
+        super().__init__()
+        if interaction_rank <= 0:
+            raise ValueError("interaction_rank must be positive for AdditiveOperatorDecoder.")
+        self.row = nn.Parameter(torch.empty(grid_size, latent_dim))
+        self.col = nn.Parameter(torch.empty(grid_size, latent_dim))
+        self.col_scores = nn.Parameter(torch.empty(grid_size, interaction_rank))
+        self.operator_basis = nn.Parameter(torch.empty(interaction_rank, latent_dim, latent_dim))
+        nn.init.normal_(self.row, mean=0.0, std=0.02)
+        nn.init.normal_(self.col, mean=0.0, std=0.02)
+        nn.init.normal_(self.col_scores, mean=0.0, std=0.02)
+        nn.init.normal_(self.operator_basis, mean=0.0, std=0.02)
+        self.decoder = SharedDecoder(latent_dim, hidden_dim, output_dim)
+
+    def operator_residual(self) -> torch.Tensor:
+        row_centered = self.row - self.row.mean(dim=0, keepdim=True)
+        col_scores_centered = self.col_scores - self.col_scores.mean(dim=0, keepdim=True)
+        return torch.einsum("jq,qde,ie->ijd", col_scores_centered, self.operator_basis, row_centered)
+
+    def latent_grid(self) -> torch.Tensor:
+        base = self.row[:, None, :] + self.col[None, :, :]
+        return base + self.operator_residual()
+
+    def residual_grid(self) -> torch.Tensor:
+        return self.operator_residual()
+
+    def forward(self) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        latents = self.latent_grid()
+        recon = self.decoder(latents.reshape(-1, latents.shape[-1])).reshape(latents.shape[0], latents.shape[1], -1)
+        return recon, latents, self.residual_grid()
+
+
+class AdditiveOperatorDiagDecoder(nn.Module):
+    def __init__(self, grid_size: int, latent_dim: int, hidden_dim: int, output_dim: int, interaction_rank: int) -> None:
+        super().__init__()
+        if interaction_rank <= 0:
+            raise ValueError("interaction_rank must be positive for AdditiveOperatorDiagDecoder.")
+        self.row = nn.Parameter(torch.empty(grid_size, latent_dim))
+        self.col = nn.Parameter(torch.empty(grid_size, latent_dim))
+        self.col_scores = nn.Parameter(torch.empty(grid_size, interaction_rank))
+        self.diag_basis = nn.Parameter(torch.empty(interaction_rank, latent_dim))
+        nn.init.normal_(self.row, mean=0.0, std=0.02)
+        nn.init.normal_(self.col, mean=0.0, std=0.02)
+        nn.init.normal_(self.col_scores, mean=0.0, std=0.02)
+        nn.init.normal_(self.diag_basis, mean=0.0, std=0.02)
+        self.decoder = SharedDecoder(latent_dim, hidden_dim, output_dim)
+
+    def operator_residual(self) -> torch.Tensor:
+        row_centered = self.row - self.row.mean(dim=0, keepdim=True)
+        col_scores_centered = self.col_scores - self.col_scores.mean(dim=0, keepdim=True)
+        return torch.einsum("jq,qd,id->ijd", col_scores_centered, self.diag_basis, row_centered)
+
+    def latent_grid(self) -> torch.Tensor:
+        base = self.row[:, None, :] + self.col[None, :, :]
+        return base + self.operator_residual()
+
+    def residual_grid(self) -> torch.Tensor:
+        return self.operator_residual()
+
+    def forward(self) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        latents = self.latent_grid()
+        recon = self.decoder(latents.reshape(-1, latents.shape[-1])).reshape(latents.shape[0], latents.shape[1], -1)
+        return recon, latents, self.residual_grid()
+
+
 def build_model(config: DirectBenchmarkConfig, output_dim: int) -> nn.Module:
     if config.model_type == "coord":
         return CoordLatentDecoder(config.grid_size, config.latent_dim, config.hidden_dim, output_dim)
@@ -177,6 +286,30 @@ def build_model(config: DirectBenchmarkConfig, output_dim: int) -> nn.Module:
         return AdditiveLatentDecoder(config.grid_size, config.latent_dim, config.hidden_dim, output_dim, use_residual=True)
     if config.model_type == "additive_low_rank":
         return AdditiveLowRankDecoder(
+            config.grid_size,
+            config.latent_dim,
+            config.hidden_dim,
+            output_dim,
+            interaction_rank=config.interaction_rank,
+        )
+    if config.model_type == "additive_interaction_mlp":
+        return AdditiveInteractionMLPDecoder(
+            config.grid_size,
+            config.latent_dim,
+            config.hidden_dim,
+            output_dim,
+            interaction_rank=config.interaction_rank,
+        )
+    if config.model_type == "additive_operator":
+        return AdditiveOperatorDecoder(
+            config.grid_size,
+            config.latent_dim,
+            config.hidden_dim,
+            output_dim,
+            interaction_rank=config.interaction_rank,
+        )
+    if config.model_type == "additive_operator_diag":
+        return AdditiveOperatorDiagDecoder(
             config.grid_size,
             config.latent_dim,
             config.hidden_dim,

@@ -4,7 +4,10 @@ import torch
 
 from structured_latent_hypothesis.direct_separable import (
     AdditiveLatentDecoder,
+    AdditiveInteractionMLPDecoder,
     AdditiveLowRankDecoder,
+    AdditiveOperatorDiagDecoder,
+    AdditiveOperatorDecoder,
     CoordLatentDecoder,
     DirectBenchmarkConfig,
     train_direct_with_nested_selection,
@@ -28,6 +31,27 @@ class DirectSeparableTest(unittest.TestCase):
 
     def test_low_rank_decoder_centers_interaction_main_effects(self) -> None:
         model = AdditiveLowRankDecoder(grid_size=6, latent_dim=4, hidden_dim=24, output_dim=16, interaction_rank=2)
+        residual = model.residual_grid()
+        self.assertEqual(residual.shape, torch.Size([6, 6, 4]))
+        self.assertLess(float(residual.mean(dim=0).abs().max().item()), 1e-6)
+        self.assertLess(float(residual.mean(dim=1).abs().max().item()), 1e-6)
+
+    def test_interaction_mlp_decoder_centers_interaction_main_effects(self) -> None:
+        model = AdditiveInteractionMLPDecoder(grid_size=6, latent_dim=4, hidden_dim=24, output_dim=16, interaction_rank=2)
+        residual = model.residual_grid()
+        self.assertEqual(residual.shape, torch.Size([6, 6, 4]))
+        self.assertLess(float(residual.mean(dim=0).abs().max().item()), 1e-6)
+        self.assertLess(float(residual.mean(dim=1).abs().max().item()), 1e-6)
+
+    def test_operator_decoder_centers_interaction_main_effects(self) -> None:
+        model = AdditiveOperatorDecoder(grid_size=6, latent_dim=4, hidden_dim=24, output_dim=16, interaction_rank=2)
+        residual = model.residual_grid()
+        self.assertEqual(residual.shape, torch.Size([6, 6, 4]))
+        self.assertLess(float(residual.mean(dim=0).abs().max().item()), 1e-6)
+        self.assertLess(float(residual.mean(dim=1).abs().max().item()), 1e-6)
+
+    def test_operator_diag_decoder_centers_interaction_main_effects(self) -> None:
+        model = AdditiveOperatorDiagDecoder(grid_size=6, latent_dim=4, hidden_dim=24, output_dim=16, interaction_rank=2)
         residual = model.residual_grid()
         self.assertEqual(residual.shape, torch.Size([6, 6, 4]))
         self.assertLess(float(residual.mean(dim=0).abs().max().item()), 1e-6)
