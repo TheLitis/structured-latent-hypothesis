@@ -1,0 +1,1574 @@
+{
+  "budget": 8,
+  "regret_tolerance": 1e-05,
+  "structured_violation_cost": 5.0,
+  "fallback_overbudget_cost": 2.0,
+  "escalate_needed_cost": 1.0,
+  "escalate_unneeded_cost": 1.5,
+  "safe_label_key": "task_safe_regret_1e-05",
+  "budget_label_key": "task_within_budget_8",
+  "safe_score_keys": [
+    "score_residual",
+    "score_joint_sum"
+  ],
+  "budget_score_keys": [
+    "score_interaction",
+    "score_joint_sum",
+    "score_joint_prod"
+  ],
+  "cross_validation": {
+    "seed": {
+      "per_group": [
+        {
+          "average_cost": 0.2857142857142857,
+          "oracle_average_cost": 0.07142857142857142,
+          "regret": 0.21428571428571427,
+          "always_structured_cost": 1.0714285714285714,
+          "always_fallback_cost": 0.2857142857142857,
+          "always_escalate_cost": 1.4285714285714286,
+          "action_rates": {
+            "structured": 0.7142857142857143,
+            "fallback": 0.07142857142857142,
+            "escalate": 0.21428571428571427
+          },
+          "per_row": [
+            {
+              "world": "context_commuting_0.00",
+              "seed": 3,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": true
+            },
+            {
+              "world": "context_commuting_0.10",
+              "seed": 3,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": true
+            },
+            {
+              "world": "context_commuting_0.20",
+              "seed": 3,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": false
+            },
+            {
+              "world": "context_commuting_0.35",
+              "seed": 3,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": true
+            },
+            {
+              "world": "context_commuting_0.50",
+              "seed": 3,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": true
+            },
+            {
+              "world": "context_commuting_0.75",
+              "seed": 3,
+              "action": "escalate",
+              "cost": 1.5,
+              "oracle_cost": 0.0,
+              "safe_prediction": false,
+              "budget_prediction": false
+            },
+            {
+              "world": "context_commuting_1.00",
+              "seed": 3,
+              "action": "escalate",
+              "cost": 1.5,
+              "oracle_cost": 0.0,
+              "safe_prediction": false,
+              "budget_prediction": false
+            },
+            {
+              "world": "context_coupled_0.00",
+              "seed": 3,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": true
+            },
+            {
+              "world": "context_coupled_0.10",
+              "seed": 3,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": true
+            },
+            {
+              "world": "context_coupled_0.20",
+              "seed": 3,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": true
+            },
+            {
+              "world": "context_coupled_0.35",
+              "seed": 3,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": true
+            },
+            {
+              "world": "context_coupled_0.50",
+              "seed": 3,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": true
+            },
+            {
+              "world": "context_coupled_0.75",
+              "seed": 3,
+              "action": "fallback",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": false,
+              "budget_prediction": true
+            },
+            {
+              "world": "context_coupled_1.00",
+              "seed": 3,
+              "action": "escalate",
+              "cost": 1.0,
+              "oracle_cost": 1.0,
+              "safe_prediction": false,
+              "budget_prediction": false
+            }
+          ],
+          "seed": 3,
+          "safe_score_key": "score_residual",
+          "budget_score_key": "score_interaction",
+          "safe_band": 0.0,
+          "budget_band": 0.0
+        },
+        {
+          "average_cost": 0.0,
+          "oracle_average_cost": 0.0,
+          "regret": 0.0,
+          "always_structured_cost": 0.7142857142857143,
+          "always_fallback_cost": 0.0,
+          "always_escalate_cost": 1.5,
+          "action_rates": {
+            "structured": 0.7857142857142857,
+            "fallback": 0.21428571428571427,
+            "escalate": 0.0
+          },
+          "per_row": [
+            {
+              "world": "context_commuting_0.00",
+              "seed": 11,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": true
+            },
+            {
+              "world": "context_commuting_0.10",
+              "seed": 11,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": true
+            },
+            {
+              "world": "context_commuting_0.20",
+              "seed": 11,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": true
+            },
+            {
+              "world": "context_commuting_0.35",
+              "seed": 11,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": true
+            },
+            {
+              "world": "context_commuting_0.50",
+              "seed": 11,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": true
+            },
+            {
+              "world": "context_commuting_0.75",
+              "seed": 11,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": true
+            },
+            {
+              "world": "context_commuting_1.00",
+              "seed": 11,
+              "action": "fallback",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": false,
+              "budget_prediction": true
+            },
+            {
+              "world": "context_coupled_0.00",
+              "seed": 11,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": true
+            },
+            {
+              "world": "context_coupled_0.10",
+              "seed": 11,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": true
+            },
+            {
+              "world": "context_coupled_0.20",
+              "seed": 11,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": true
+            },
+            {
+              "world": "context_coupled_0.35",
+              "seed": 11,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": true
+            },
+            {
+              "world": "context_coupled_0.50",
+              "seed": 11,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": true
+            },
+            {
+              "world": "context_coupled_0.75",
+              "seed": 11,
+              "action": "fallback",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": false,
+              "budget_prediction": true
+            },
+            {
+              "world": "context_coupled_1.00",
+              "seed": 11,
+              "action": "fallback",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": false,
+              "budget_prediction": true
+            }
+          ],
+          "seed": 11,
+          "safe_score_key": "score_residual",
+          "budget_score_key": "score_interaction",
+          "safe_band": 0.0,
+          "budget_band": 0.0
+        },
+        {
+          "average_cost": 1.1428571428571428,
+          "oracle_average_cost": 0.07142857142857142,
+          "regret": 1.0714285714285714,
+          "always_structured_cost": 0.7142857142857143,
+          "always_fallback_cost": 0.8571428571428571,
+          "always_escalate_cost": 1.2857142857142858,
+          "action_rates": {
+            "structured": 0.14285714285714285,
+            "fallback": 0.0,
+            "escalate": 0.8571428571428571
+          },
+          "per_row": [
+            {
+              "world": "context_commuting_0.00",
+              "seed": 29,
+              "action": "escalate",
+              "cost": 1.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": false,
+              "budget_prediction": false
+            },
+            {
+              "world": "context_commuting_0.10",
+              "seed": 29,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": false
+            },
+            {
+              "world": "context_commuting_0.20",
+              "seed": 29,
+              "action": "escalate",
+              "cost": 1.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": false,
+              "budget_prediction": false
+            },
+            {
+              "world": "context_commuting_0.35",
+              "seed": 29,
+              "action": "escalate",
+              "cost": 1.5,
+              "oracle_cost": 0.0,
+              "safe_prediction": false,
+              "budget_prediction": false
+            },
+            {
+              "world": "context_commuting_0.50",
+              "seed": 29,
+              "action": "escalate",
+              "cost": 1.5,
+              "oracle_cost": 0.0,
+              "safe_prediction": false,
+              "budget_prediction": false
+            },
+            {
+              "world": "context_commuting_0.75",
+              "seed": 29,
+              "action": "escalate",
+              "cost": 1.5,
+              "oracle_cost": 0.0,
+              "safe_prediction": false,
+              "budget_prediction": false
+            },
+            {
+              "world": "context_commuting_1.00",
+              "seed": 29,
+              "action": "escalate",
+              "cost": 1.0,
+              "oracle_cost": 1.0,
+              "safe_prediction": false,
+              "budget_prediction": false
+            },
+            {
+              "world": "context_coupled_0.00",
+              "seed": 29,
+              "action": "escalate",
+              "cost": 1.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": false,
+              "budget_prediction": false
+            },
+            {
+              "world": "context_coupled_0.10",
+              "seed": 29,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": false
+            },
+            {
+              "world": "context_coupled_0.20",
+              "seed": 29,
+              "action": "escalate",
+              "cost": 1.5,
+              "oracle_cost": 0.0,
+              "safe_prediction": false,
+              "budget_prediction": false
+            },
+            {
+              "world": "context_coupled_0.35",
+              "seed": 29,
+              "action": "escalate",
+              "cost": 1.5,
+              "oracle_cost": 0.0,
+              "safe_prediction": false,
+              "budget_prediction": false
+            },
+            {
+              "world": "context_coupled_0.50",
+              "seed": 29,
+              "action": "escalate",
+              "cost": 1.5,
+              "oracle_cost": 0.0,
+              "safe_prediction": false,
+              "budget_prediction": false
+            },
+            {
+              "world": "context_coupled_0.75",
+              "seed": 29,
+              "action": "escalate",
+              "cost": 1.5,
+              "oracle_cost": 0.0,
+              "safe_prediction": false,
+              "budget_prediction": false
+            },
+            {
+              "world": "context_coupled_1.00",
+              "seed": 29,
+              "action": "escalate",
+              "cost": 1.5,
+              "oracle_cost": 0.0,
+              "safe_prediction": false,
+              "budget_prediction": false
+            }
+          ],
+          "seed": 29,
+          "safe_score_key": "score_joint_sum",
+          "budget_score_key": "score_interaction",
+          "safe_band": 0.0,
+          "budget_band": 0.0
+        }
+      ],
+      "average_cost_mean": 0.4761904761904761,
+      "oracle_average_cost_mean": 0.047619047619047616,
+      "regret_mean": 0.42857142857142855,
+      "always_structured_cost_mean": 0.8333333333333334,
+      "always_fallback_cost_mean": 0.38095238095238093,
+      "always_escalate_cost_mean": 1.4047619047619049,
+      "structured_rate_mean": 0.5476190476190476,
+      "fallback_rate_mean": 0.09523809523809523,
+      "escalate_rate_mean": 0.35714285714285715
+    },
+    "world": {
+      "per_group": [
+        {
+          "average_cost": 0.0,
+          "oracle_average_cost": 0.0,
+          "regret": 0.0,
+          "always_structured_cost": 0.0,
+          "always_fallback_cost": 0.6666666666666666,
+          "always_escalate_cost": 1.3333333333333333,
+          "action_rates": {
+            "structured": 1.0,
+            "fallback": 0.0,
+            "escalate": 0.0
+          },
+          "per_row": [
+            {
+              "world": "context_commuting_0.00",
+              "seed": 3,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": true
+            },
+            {
+              "world": "context_commuting_0.00",
+              "seed": 11,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": true
+            },
+            {
+              "world": "context_commuting_0.00",
+              "seed": 29,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": true
+            }
+          ],
+          "world": "context_commuting_0.00",
+          "safe_score_key": "score_residual",
+          "budget_score_key": "score_joint_sum",
+          "safe_band": 0.0,
+          "budget_band": 0.0
+        },
+        {
+          "average_cost": 0.0,
+          "oracle_average_cost": 0.0,
+          "regret": 0.0,
+          "always_structured_cost": 0.0,
+          "always_fallback_cost": 0.6666666666666666,
+          "always_escalate_cost": 1.3333333333333333,
+          "action_rates": {
+            "structured": 1.0,
+            "fallback": 0.0,
+            "escalate": 0.0
+          },
+          "per_row": [
+            {
+              "world": "context_commuting_0.10",
+              "seed": 3,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": true
+            },
+            {
+              "world": "context_commuting_0.10",
+              "seed": 11,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": true
+            },
+            {
+              "world": "context_commuting_0.10",
+              "seed": 29,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": true
+            }
+          ],
+          "world": "context_commuting_0.10",
+          "safe_score_key": "score_residual",
+          "budget_score_key": "score_joint_sum",
+          "safe_band": 0.0,
+          "budget_band": 0.0
+        },
+        {
+          "average_cost": 0.0,
+          "oracle_average_cost": 0.0,
+          "regret": 0.0,
+          "always_structured_cost": 0.0,
+          "always_fallback_cost": 0.6666666666666666,
+          "always_escalate_cost": 1.3333333333333333,
+          "action_rates": {
+            "structured": 1.0,
+            "fallback": 0.0,
+            "escalate": 0.0
+          },
+          "per_row": [
+            {
+              "world": "context_commuting_0.20",
+              "seed": 3,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": true
+            },
+            {
+              "world": "context_commuting_0.20",
+              "seed": 11,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": true
+            },
+            {
+              "world": "context_commuting_0.20",
+              "seed": 29,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": true
+            }
+          ],
+          "world": "context_commuting_0.20",
+          "safe_score_key": "score_residual",
+          "budget_score_key": "score_joint_sum",
+          "safe_band": 0.0,
+          "budget_band": 0.0
+        },
+        {
+          "average_cost": 0.0,
+          "oracle_average_cost": 0.0,
+          "regret": 0.0,
+          "always_structured_cost": 0.0,
+          "always_fallback_cost": 0.6666666666666666,
+          "always_escalate_cost": 1.3333333333333333,
+          "action_rates": {
+            "structured": 1.0,
+            "fallback": 0.0,
+            "escalate": 0.0
+          },
+          "per_row": [
+            {
+              "world": "context_commuting_0.35",
+              "seed": 3,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": true
+            },
+            {
+              "world": "context_commuting_0.35",
+              "seed": 11,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": true
+            },
+            {
+              "world": "context_commuting_0.35",
+              "seed": 29,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": true
+            }
+          ],
+          "world": "context_commuting_0.35",
+          "safe_score_key": "score_residual",
+          "budget_score_key": "score_joint_sum",
+          "safe_band": 0.0,
+          "budget_band": 0.0
+        },
+        {
+          "average_cost": 0.5,
+          "oracle_average_cost": 0.0,
+          "regret": 0.5,
+          "always_structured_cost": 0.0,
+          "always_fallback_cost": 0.0,
+          "always_escalate_cost": 1.5,
+          "action_rates": {
+            "structured": 0.6666666666666666,
+            "fallback": 0.0,
+            "escalate": 0.3333333333333333
+          },
+          "per_row": [
+            {
+              "world": "context_commuting_0.50",
+              "seed": 3,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": true
+            },
+            {
+              "world": "context_commuting_0.50",
+              "seed": 11,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": true
+            },
+            {
+              "world": "context_commuting_0.50",
+              "seed": 29,
+              "action": "escalate",
+              "cost": 1.5,
+              "oracle_cost": 0.0,
+              "safe_prediction": false,
+              "budget_prediction": false
+            }
+          ],
+          "world": "context_commuting_0.50",
+          "safe_score_key": "score_residual",
+          "budget_score_key": "score_interaction",
+          "safe_band": 0.0,
+          "budget_band": 0.0
+        },
+        {
+          "average_cost": 2.1666666666666665,
+          "oracle_average_cost": 0.0,
+          "regret": 2.1666666666666665,
+          "always_structured_cost": 1.6666666666666667,
+          "always_fallback_cost": 0.0,
+          "always_escalate_cost": 1.5,
+          "action_rates": {
+            "structured": 0.6666666666666666,
+            "fallback": 0.0,
+            "escalate": 0.3333333333333333
+          },
+          "per_row": [
+            {
+              "world": "context_commuting_0.75",
+              "seed": 3,
+              "action": "structured",
+              "cost": 5.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": true
+            },
+            {
+              "world": "context_commuting_0.75",
+              "seed": 11,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": true
+            },
+            {
+              "world": "context_commuting_0.75",
+              "seed": 29,
+              "action": "escalate",
+              "cost": 1.5,
+              "oracle_cost": 0.0,
+              "safe_prediction": false,
+              "budget_prediction": false
+            }
+          ],
+          "world": "context_commuting_0.75",
+          "safe_score_key": "score_residual",
+          "budget_score_key": "score_interaction",
+          "safe_band": 0.0,
+          "budget_band": 0.0
+        },
+        {
+          "average_cost": 0.6666666666666666,
+          "oracle_average_cost": 0.3333333333333333,
+          "regret": 0.3333333333333333,
+          "always_structured_cost": 5.0,
+          "always_fallback_cost": 0.6666666666666666,
+          "always_escalate_cost": 1.3333333333333333,
+          "action_rates": {
+            "structured": 0.0,
+            "fallback": 1.0,
+            "escalate": 0.0
+          },
+          "per_row": [
+            {
+              "world": "context_commuting_1.00",
+              "seed": 3,
+              "action": "fallback",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": false,
+              "budget_prediction": true
+            },
+            {
+              "world": "context_commuting_1.00",
+              "seed": 11,
+              "action": "fallback",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": false,
+              "budget_prediction": true
+            },
+            {
+              "world": "context_commuting_1.00",
+              "seed": 29,
+              "action": "fallback",
+              "cost": 2.0,
+              "oracle_cost": 1.0,
+              "safe_prediction": false,
+              "budget_prediction": true
+            }
+          ],
+          "world": "context_commuting_1.00",
+          "safe_score_key": "score_residual",
+          "budget_score_key": "score_joint_sum",
+          "safe_band": 0.0,
+          "budget_band": 0.0
+        },
+        {
+          "average_cost": 0.0,
+          "oracle_average_cost": 0.0,
+          "regret": 0.0,
+          "always_structured_cost": 0.0,
+          "always_fallback_cost": 0.6666666666666666,
+          "always_escalate_cost": 1.3333333333333333,
+          "action_rates": {
+            "structured": 1.0,
+            "fallback": 0.0,
+            "escalate": 0.0
+          },
+          "per_row": [
+            {
+              "world": "context_coupled_0.00",
+              "seed": 3,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": true
+            },
+            {
+              "world": "context_coupled_0.00",
+              "seed": 11,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": true
+            },
+            {
+              "world": "context_coupled_0.00",
+              "seed": 29,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": true
+            }
+          ],
+          "world": "context_coupled_0.00",
+          "safe_score_key": "score_residual",
+          "budget_score_key": "score_joint_sum",
+          "safe_band": 0.0,
+          "budget_band": 0.0
+        },
+        {
+          "average_cost": 0.0,
+          "oracle_average_cost": 0.0,
+          "regret": 0.0,
+          "always_structured_cost": 0.0,
+          "always_fallback_cost": 0.6666666666666666,
+          "always_escalate_cost": 1.3333333333333333,
+          "action_rates": {
+            "structured": 1.0,
+            "fallback": 0.0,
+            "escalate": 0.0
+          },
+          "per_row": [
+            {
+              "world": "context_coupled_0.10",
+              "seed": 3,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": true
+            },
+            {
+              "world": "context_coupled_0.10",
+              "seed": 11,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": true
+            },
+            {
+              "world": "context_coupled_0.10",
+              "seed": 29,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": true
+            }
+          ],
+          "world": "context_coupled_0.10",
+          "safe_score_key": "score_residual",
+          "budget_score_key": "score_joint_sum",
+          "safe_band": 0.0,
+          "budget_band": 0.0
+        },
+        {
+          "average_cost": 0.0,
+          "oracle_average_cost": 0.0,
+          "regret": 0.0,
+          "always_structured_cost": 0.0,
+          "always_fallback_cost": 0.0,
+          "always_escalate_cost": 1.5,
+          "action_rates": {
+            "structured": 1.0,
+            "fallback": 0.0,
+            "escalate": 0.0
+          },
+          "per_row": [
+            {
+              "world": "context_coupled_0.20",
+              "seed": 3,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": true
+            },
+            {
+              "world": "context_coupled_0.20",
+              "seed": 11,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": true
+            },
+            {
+              "world": "context_coupled_0.20",
+              "seed": 29,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": false
+            }
+          ],
+          "world": "context_coupled_0.20",
+          "safe_score_key": "score_residual",
+          "budget_score_key": "score_interaction",
+          "safe_band": 0.0,
+          "budget_band": 0.0
+        },
+        {
+          "average_cost": 0.0,
+          "oracle_average_cost": 0.0,
+          "regret": 0.0,
+          "always_structured_cost": 0.0,
+          "always_fallback_cost": 0.0,
+          "always_escalate_cost": 1.5,
+          "action_rates": {
+            "structured": 1.0,
+            "fallback": 0.0,
+            "escalate": 0.0
+          },
+          "per_row": [
+            {
+              "world": "context_coupled_0.35",
+              "seed": 3,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": true
+            },
+            {
+              "world": "context_coupled_0.35",
+              "seed": 11,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": true
+            },
+            {
+              "world": "context_coupled_0.35",
+              "seed": 29,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": false
+            }
+          ],
+          "world": "context_coupled_0.35",
+          "safe_score_key": "score_residual",
+          "budget_score_key": "score_interaction",
+          "safe_band": 0.0,
+          "budget_band": 0.0
+        },
+        {
+          "average_cost": 0.0,
+          "oracle_average_cost": 0.0,
+          "regret": 0.0,
+          "always_structured_cost": 0.0,
+          "always_fallback_cost": 0.0,
+          "always_escalate_cost": 1.5,
+          "action_rates": {
+            "structured": 1.0,
+            "fallback": 0.0,
+            "escalate": 0.0
+          },
+          "per_row": [
+            {
+              "world": "context_coupled_0.50",
+              "seed": 3,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": true
+            },
+            {
+              "world": "context_coupled_0.50",
+              "seed": 11,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": true
+            },
+            {
+              "world": "context_coupled_0.50",
+              "seed": 29,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": false
+            }
+          ],
+          "world": "context_coupled_0.50",
+          "safe_score_key": "score_residual",
+          "budget_score_key": "score_interaction",
+          "safe_band": 0.0,
+          "budget_band": 0.0
+        },
+        {
+          "average_cost": 0.5,
+          "oracle_average_cost": 0.0,
+          "regret": 0.5,
+          "always_structured_cost": 0.0,
+          "always_fallback_cost": 0.0,
+          "always_escalate_cost": 1.5,
+          "action_rates": {
+            "structured": 0.0,
+            "fallback": 0.6666666666666666,
+            "escalate": 0.3333333333333333
+          },
+          "per_row": [
+            {
+              "world": "context_coupled_0.75",
+              "seed": 3,
+              "action": "fallback",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": false,
+              "budget_prediction": true
+            },
+            {
+              "world": "context_coupled_0.75",
+              "seed": 11,
+              "action": "fallback",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": false,
+              "budget_prediction": true
+            },
+            {
+              "world": "context_coupled_0.75",
+              "seed": 29,
+              "action": "escalate",
+              "cost": 1.5,
+              "oracle_cost": 0.0,
+              "safe_prediction": false,
+              "budget_prediction": false
+            }
+          ],
+          "world": "context_coupled_0.75",
+          "safe_score_key": "score_residual",
+          "budget_score_key": "score_interaction",
+          "safe_band": 0.0,
+          "budget_band": 0.0
+        },
+        {
+          "average_cost": 0.8333333333333334,
+          "oracle_average_cost": 0.3333333333333333,
+          "regret": 0.5,
+          "always_structured_cost": 5.0,
+          "always_fallback_cost": 0.6666666666666666,
+          "always_escalate_cost": 1.3333333333333333,
+          "action_rates": {
+            "structured": 0.0,
+            "fallback": 0.3333333333333333,
+            "escalate": 0.6666666666666666
+          },
+          "per_row": [
+            {
+              "world": "context_coupled_1.00",
+              "seed": 3,
+              "action": "escalate",
+              "cost": 1.0,
+              "oracle_cost": 1.0,
+              "safe_prediction": false,
+              "budget_prediction": false
+            },
+            {
+              "world": "context_coupled_1.00",
+              "seed": 11,
+              "action": "fallback",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": false,
+              "budget_prediction": true
+            },
+            {
+              "world": "context_coupled_1.00",
+              "seed": 29,
+              "action": "escalate",
+              "cost": 1.5,
+              "oracle_cost": 0.0,
+              "safe_prediction": false,
+              "budget_prediction": false
+            }
+          ],
+          "world": "context_coupled_1.00",
+          "safe_score_key": "score_residual",
+          "budget_score_key": "score_interaction",
+          "safe_band": 0.0,
+          "budget_band": 0.0
+        }
+      ],
+      "average_cost_mean": 0.3333333333333333,
+      "oracle_average_cost_mean": 0.047619047619047616,
+      "regret_mean": 0.2857142857142857,
+      "always_structured_cost_mean": 0.8333333333333334,
+      "always_fallback_cost_mean": 0.38095238095238093,
+      "always_escalate_cost_mean": 1.4047619047619049,
+      "structured_rate_mean": 0.7380952380952381,
+      "fallback_rate_mean": 0.14285714285714285,
+      "escalate_rate_mean": 0.11904761904761904
+    },
+    "family": {
+      "per_group": [
+        {
+          "average_cost": 0.7857142857142857,
+          "oracle_average_cost": 0.047619047619047616,
+          "regret": 0.7380952380952381,
+          "always_structured_cost": 0.9523809523809523,
+          "always_fallback_cost": 0.47619047619047616,
+          "always_escalate_cost": 1.380952380952381,
+          "action_rates": {
+            "structured": 0.9523809523809523,
+            "fallback": 0.0,
+            "escalate": 0.047619047619047616
+          },
+          "per_row": [
+            {
+              "world": "context_commuting_0.00",
+              "seed": 3,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": true
+            },
+            {
+              "world": "context_commuting_0.00",
+              "seed": 11,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": true
+            },
+            {
+              "world": "context_commuting_0.00",
+              "seed": 29,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": false
+            },
+            {
+              "world": "context_commuting_0.10",
+              "seed": 3,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": true
+            },
+            {
+              "world": "context_commuting_0.10",
+              "seed": 11,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": true
+            },
+            {
+              "world": "context_commuting_0.10",
+              "seed": 29,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": false
+            },
+            {
+              "world": "context_commuting_0.20",
+              "seed": 3,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": false
+            },
+            {
+              "world": "context_commuting_0.20",
+              "seed": 11,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": true
+            },
+            {
+              "world": "context_commuting_0.20",
+              "seed": 29,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": false
+            },
+            {
+              "world": "context_commuting_0.35",
+              "seed": 3,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": true
+            },
+            {
+              "world": "context_commuting_0.35",
+              "seed": 11,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": true
+            },
+            {
+              "world": "context_commuting_0.35",
+              "seed": 29,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": false
+            },
+            {
+              "world": "context_commuting_0.50",
+              "seed": 3,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": true
+            },
+            {
+              "world": "context_commuting_0.50",
+              "seed": 11,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": true
+            },
+            {
+              "world": "context_commuting_0.50",
+              "seed": 29,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": false
+            },
+            {
+              "world": "context_commuting_0.75",
+              "seed": 3,
+              "action": "structured",
+              "cost": 5.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": false
+            },
+            {
+              "world": "context_commuting_0.75",
+              "seed": 11,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": true
+            },
+            {
+              "world": "context_commuting_0.75",
+              "seed": 29,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": false
+            },
+            {
+              "world": "context_commuting_1.00",
+              "seed": 3,
+              "action": "escalate",
+              "cost": 1.5,
+              "oracle_cost": 0.0,
+              "safe_prediction": false,
+              "budget_prediction": false
+            },
+            {
+              "world": "context_commuting_1.00",
+              "seed": 11,
+              "action": "structured",
+              "cost": 5.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": true
+            },
+            {
+              "world": "context_commuting_1.00",
+              "seed": 29,
+              "action": "structured",
+              "cost": 5.0,
+              "oracle_cost": 1.0,
+              "safe_prediction": true,
+              "budget_prediction": false
+            }
+          ],
+          "family": "commuting",
+          "safe_score_key": "score_residual",
+          "budget_score_key": "score_interaction",
+          "safe_band": 0.0,
+          "budget_band": 0.0
+        },
+        {
+          "average_cost": 0.19047619047619047,
+          "oracle_average_cost": 0.047619047619047616,
+          "regret": 0.14285714285714285,
+          "always_structured_cost": 0.7142857142857143,
+          "always_fallback_cost": 0.2857142857142857,
+          "always_escalate_cost": 1.4285714285714286,
+          "action_rates": {
+            "structured": 0.7142857142857143,
+            "fallback": 0.14285714285714285,
+            "escalate": 0.14285714285714285
+          },
+          "per_row": [
+            {
+              "world": "context_coupled_0.00",
+              "seed": 3,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": true
+            },
+            {
+              "world": "context_coupled_0.00",
+              "seed": 11,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": true
+            },
+            {
+              "world": "context_coupled_0.00",
+              "seed": 29,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": false
+            },
+            {
+              "world": "context_coupled_0.10",
+              "seed": 3,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": true
+            },
+            {
+              "world": "context_coupled_0.10",
+              "seed": 11,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": true
+            },
+            {
+              "world": "context_coupled_0.10",
+              "seed": 29,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": false
+            },
+            {
+              "world": "context_coupled_0.20",
+              "seed": 3,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": true
+            },
+            {
+              "world": "context_coupled_0.20",
+              "seed": 11,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": true
+            },
+            {
+              "world": "context_coupled_0.20",
+              "seed": 29,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": false
+            },
+            {
+              "world": "context_coupled_0.35",
+              "seed": 3,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": true
+            },
+            {
+              "world": "context_coupled_0.35",
+              "seed": 11,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": true
+            },
+            {
+              "world": "context_coupled_0.35",
+              "seed": 29,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": false
+            },
+            {
+              "world": "context_coupled_0.50",
+              "seed": 3,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": true
+            },
+            {
+              "world": "context_coupled_0.50",
+              "seed": 11,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": true
+            },
+            {
+              "world": "context_coupled_0.50",
+              "seed": 29,
+              "action": "structured",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": true,
+              "budget_prediction": false
+            },
+            {
+              "world": "context_coupled_0.75",
+              "seed": 3,
+              "action": "fallback",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": false,
+              "budget_prediction": true
+            },
+            {
+              "world": "context_coupled_0.75",
+              "seed": 11,
+              "action": "fallback",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": false,
+              "budget_prediction": true
+            },
+            {
+              "world": "context_coupled_0.75",
+              "seed": 29,
+              "action": "escalate",
+              "cost": 1.5,
+              "oracle_cost": 0.0,
+              "safe_prediction": false,
+              "budget_prediction": false
+            },
+            {
+              "world": "context_coupled_1.00",
+              "seed": 3,
+              "action": "escalate",
+              "cost": 1.0,
+              "oracle_cost": 1.0,
+              "safe_prediction": false,
+              "budget_prediction": false
+            },
+            {
+              "world": "context_coupled_1.00",
+              "seed": 11,
+              "action": "fallback",
+              "cost": 0.0,
+              "oracle_cost": 0.0,
+              "safe_prediction": false,
+              "budget_prediction": true
+            },
+            {
+              "world": "context_coupled_1.00",
+              "seed": 29,
+              "action": "escalate",
+              "cost": 1.5,
+              "oracle_cost": 0.0,
+              "safe_prediction": false,
+              "budget_prediction": false
+            }
+          ],
+          "family": "coupled",
+          "safe_score_key": "score_residual",
+          "budget_score_key": "score_interaction",
+          "safe_band": 0.0,
+          "budget_band": 0.0
+        }
+      ],
+      "average_cost_mean": 0.4880952380952381,
+      "oracle_average_cost_mean": 0.047619047619047616,
+      "regret_mean": 0.44047619047619047,
+      "always_structured_cost_mean": 0.8333333333333333,
+      "always_fallback_cost_mean": 0.38095238095238093,
+      "always_escalate_cost_mean": 1.4047619047619047,
+      "structured_rate_mean": 0.8333333333333333,
+      "fallback_rate_mean": 0.07142857142857142,
+      "escalate_rate_mean": 0.09523809523809523
+    }
+  }
+}
