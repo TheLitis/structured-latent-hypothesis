@@ -329,6 +329,258 @@ def leave_one_seed_out_classifier(
     }
 
 
+def quantile(values: list[float], q: float) -> float:
+    if not values:
+        return 0.0
+    ordered = sorted(values)
+    index = int(round((len(ordered) - 1) * q))
+    return ordered[max(0, min(index, len(ordered) - 1))]
+
+
+def abstain_confusion_counts(labels: list[bool], predictions: list[bool | None]) -> dict[str, int]:
+    tp = sum(int(label and prediction is True) for label, prediction in zip(labels, predictions))
+    tn = sum(int((not label) and prediction is False) for label, prediction in zip(labels, predictions))
+    fp = sum(int((not label) and prediction is True) for label, prediction in zip(labels, predictions))
+    fn = sum(int(label and prediction is False) for label, prediction in zip(labels, predictions))
+    ap = sum(int(label and prediction is None) for label, prediction in zip(labels, predictions))
+    an = sum(int((not label) and prediction is None) for label, prediction in zip(labels, predictions))
+    return {"tp": tp, "tn": tn, "fp": fp, "fn": fn, "ap": ap, "an": an}
+
+
+def average_abstain_cost(
+    counts: dict[str, int],
+    *,
+    false_positive_cost: float,
+    false_negative_cost: float,
+    abstain_positive_cost: float,
+    abstain_negative_cost: float,
+) -> float:
+    total = counts["tp"] + counts["tn"] + counts["fp"] + counts["fn"] + counts["ap"] + counts["an"]
+    if total == 0:
+        return 0.0
+    numerator = (
+        counts["fp"] * false_positive_cost
+        + counts["fn"] * false_negative_cost
+        + counts["ap"] * abstain_positive_cost
+        + counts["an"] * abstain_negative_cost
+    )
+    return numerator / total
+
+
+def select_cost_sensitive_abstain(
+    rows: list[dict],
+    score_key: str,
+    label_key: str,
+    *,
+    false_positive_cost: float,
+    false_negative_cost: float,
+    abstain_positive_cost: float,
+    abstain_negative_cost: float,
+) -> dict:
+    unique_scores = sorted({float(row[score_key]) for row in rows})
+    best: tuple[float, float, float, float, float, str, float] | None = None
+    for threshold in unique_scores:
+        margins = [abs(float(row[score_key]) - threshold) for row in rows]
+        band_candidates = sorted({0.0, quantile(margins, 0.20), quantile(margins, 0.35), quantile(margins, 0.50)})
+        for direction in ("low", "high"):
+            for band in band_candidates:
+                labels = [bool(row[label_key]) for row in rows]
+                predictions: list[bool | None] = []
+                for row in rows:
+                    score = float(row[score_key])
+                    if band > 0.0 and abs(score - threshold) <= band:
+                        predictions.append(None)
+                    elif direction == "low":
+                        predictions.append(score <= threshold)
+                    else:
+                        predictions.append(score >= threshold)
+                counts = abstain_confusion_counts(labels, predictions)
+                average_cost = average_abstain_cost(
+                    counts,
+                    false_positive_cost=false_positive_cost,
+                    false_negative_cost=false_negative_cost,
+                    abstain_positive_cost=abstain_positive_cost,
+                    abstain_negative_cost=abstain_negative_cost,
+                )
+                resolved = counts["tp"] + counts["tn"] + counts["fp"] + counts["fn"]
+                coverage = resolved / len(rows)
+                balanced_accuracy = balanced_accuracy_from_counts(counts)
+                candidate = (average_cost, -coverage, -balanced_accuracy, band, threshold, direction, coverage)
+                if best is None or candidate < best:
+                    best = candidate
+    assert best is not None
+    return {
+        "threshold": best[4],
+        "direction": best[5],
+        "band": best[3],
+        "train_cost": best[0],
+        "train_coverage": best[6],
+        "train_balanced_accuracy": -best[2],
+    }
+
+
+def evaluate_cost_sensitive_abstain(
+    rows: list[dict],
+    score_key: str,
+    label_key: str,
+    *,
+    threshold: float,
+    direction: str,
+    band: float,
+    false_positive_cost: float,
+    false_negative_cost: float,
+    abstain_positive_cost: float,
+    abstain_negative_cost: float,
+) -> dict:
+    labels = [bool(row[label_key]) for row in rows]
+    predictions: list[bool | None] = []
+    for row in rows:
+        score = float(row[score_key])
+        if band > 0.0 and abs(score - threshold) <= band:
+            predictions.append(None)
+        elif direction == "low":
+            predictions.append(score <= threshold)
+        else:
+            predictions.append(score >= threshold)
+    counts = abstain_confusion_counts(labels, predictions)
+    total = len(rows)
+    resolved = counts["tp"] + counts["tn"] + counts["fp"] + counts["fn"]
+    always_positive_counts = abstain_confusion_counts(labels, [True] * total)
+    always_negative_counts = abstain_confusion_counts(labels, [False] * total)
+    always_abstain_counts = abstain_confusion_counts(labels, [None] * total)
+    return {
+        "average_cost": average_abstain_cost(
+            counts,
+            false_positive_cost=false_positive_cost,
+            false_negative_cost=false_negative_cost,
+            abstain_positive_cost=abstain_positive_cost,
+            abstain_negative_cost=abstain_negative_cost,
+        ),
+        "coverage": resolved / total if total else 0.0,
+        "abstain_rate": (counts["ap"] + counts["an"]) / total if total else 0.0,
+        "balanced_accuracy": balanced_accuracy_from_counts(counts),
+        "counts": counts,
+        "always_positive_cost": average_abstain_cost(
+            always_positive_counts,
+            false_positive_cost=false_positive_cost,
+            false_negative_cost=false_negative_cost,
+            abstain_positive_cost=abstain_positive_cost,
+            abstain_negative_cost=abstain_negative_cost,
+        ),
+        "always_negative_cost": average_abstain_cost(
+            always_negative_counts,
+            false_positive_cost=false_positive_cost,
+            false_negative_cost=false_negative_cost,
+            abstain_positive_cost=abstain_positive_cost,
+            abstain_negative_cost=abstain_negative_cost,
+        ),
+        "always_abstain_cost": average_abstain_cost(
+            always_abstain_counts,
+            false_positive_cost=false_positive_cost,
+            false_negative_cost=false_negative_cost,
+            abstain_positive_cost=abstain_positive_cost,
+            abstain_negative_cost=abstain_negative_cost,
+        ),
+    }
+
+
+def cross_validate_classifier_by_group(
+    rows: list[dict],
+    score_key: str,
+    label_key: str,
+    *,
+    group_key: str,
+    false_positive_cost: float,
+    false_negative_cost: float,
+) -> dict:
+    per_group: list[dict] = []
+    for group_value in sorted({row[group_key] for row in rows}):
+        train_rows = [row for row in rows if row[group_key] != group_value]
+        test_rows = [row for row in rows if row[group_key] == group_value]
+        selected = select_cost_sensitive_threshold(
+            train_rows,
+            score_key,
+            label_key,
+            false_positive_cost=false_positive_cost,
+            false_negative_cost=false_negative_cost,
+        )
+        metrics = evaluate_cost_sensitive_threshold(
+            test_rows,
+            score_key,
+            label_key,
+            threshold=selected["threshold"],
+            direction=selected["direction"],
+            false_positive_cost=false_positive_cost,
+            false_negative_cost=false_negative_cost,
+        )
+        metrics[group_key] = group_value
+        metrics["threshold"] = selected["threshold"]
+        metrics["direction"] = selected["direction"]
+        per_group.append(metrics)
+    return {
+        "per_group": per_group,
+        "average_cost_mean": sum(row["average_cost"] for row in per_group) / len(per_group),
+        "accuracy_mean": sum(row["accuracy"] for row in per_group) / len(per_group),
+        "balanced_accuracy_mean": sum(row["balanced_accuracy"] for row in per_group) / len(per_group),
+        "positive_rate_mean": sum(row["positive_rate"] for row in per_group) / len(per_group),
+        "always_positive_cost_mean": sum(row["always_positive_cost"] for row in per_group) / len(per_group),
+        "always_negative_cost_mean": sum(row["always_negative_cost"] for row in per_group) / len(per_group),
+    }
+
+
+def cross_validate_abstain_by_group(
+    rows: list[dict],
+    score_key: str,
+    label_key: str,
+    *,
+    group_key: str,
+    false_positive_cost: float,
+    false_negative_cost: float,
+    abstain_positive_cost: float,
+    abstain_negative_cost: float,
+) -> dict:
+    per_group: list[dict] = []
+    for group_value in sorted({row[group_key] for row in rows}):
+        train_rows = [row for row in rows if row[group_key] != group_value]
+        test_rows = [row for row in rows if row[group_key] == group_value]
+        selected = select_cost_sensitive_abstain(
+            train_rows,
+            score_key,
+            label_key,
+            false_positive_cost=false_positive_cost,
+            false_negative_cost=false_negative_cost,
+            abstain_positive_cost=abstain_positive_cost,
+            abstain_negative_cost=abstain_negative_cost,
+        )
+        metrics = evaluate_cost_sensitive_abstain(
+            test_rows,
+            score_key,
+            label_key,
+            threshold=selected["threshold"],
+            direction=selected["direction"],
+            band=selected["band"],
+            false_positive_cost=false_positive_cost,
+            false_negative_cost=false_negative_cost,
+            abstain_positive_cost=abstain_positive_cost,
+            abstain_negative_cost=abstain_negative_cost,
+        )
+        metrics[group_key] = group_value
+        metrics["threshold"] = selected["threshold"]
+        metrics["direction"] = selected["direction"]
+        metrics["band"] = selected["band"]
+        per_group.append(metrics)
+    return {
+        "per_group": per_group,
+        "average_cost_mean": sum(row["average_cost"] for row in per_group) / len(per_group),
+        "coverage_mean": sum(row["coverage"] for row in per_group) / len(per_group),
+        "abstain_rate_mean": sum(row["abstain_rate"] for row in per_group) / len(per_group),
+        "balanced_accuracy_mean": sum(row["balanced_accuracy"] for row in per_group) / len(per_group),
+        "always_positive_cost_mean": sum(row["always_positive_cost"] for row in per_group) / len(per_group),
+        "always_negative_cost_mean": sum(row["always_negative_cost"] for row in per_group) / len(per_group),
+        "always_abstain_cost_mean": sum(row["always_abstain_cost"] for row in per_group) / len(per_group),
+    }
+
+
 def analyze_context_transfer_criterion(rows: list[dict]) -> dict:
     subsets = ["all", "coupled", "commuting", "low_alpha", "high_alpha"]
     targets = {
