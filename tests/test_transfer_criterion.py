@@ -4,15 +4,20 @@ import math
 import unittest
 
 from structured_latent_hypothesis.transfer_criterion import (
+    action_cost,
     cross_validate_abstain_by_group,
     cross_validate_classifier_by_group,
+    cross_validate_transfer_decision_policy,
     evaluate_cost_sensitive_threshold,
     evaluate_router,
     evaluate_cost_sensitive_abstain,
+    evaluate_transfer_decision_policy,
     leave_one_seed_out_router,
     leave_one_seed_out_classifier,
+    predict_abstain_label,
     select_cost_sensitive_abstain,
     select_cost_sensitive_threshold,
+    select_transfer_decision_policy,
     select_threshold_router,
     spearman_correlation,
 )
@@ -204,6 +209,143 @@ class TransferCriterionTests(unittest.TestCase):
         self.assertEqual(len(metrics["per_group"]), 2)
         self.assertTrue(0.0 <= metrics["coverage_mean"] <= 1.0)
         self.assertTrue(0.0 <= metrics["abstain_rate_mean"] <= 1.0)
+
+    def test_transfer_decision_policy_prefers_structured_then_fallback(self) -> None:
+        rows = [
+            {
+                "world": "a",
+                "seed": 1,
+                "safe_score": 0.10,
+                "budget_score": 0.20,
+                "task_safe": True,
+                "task_budget": False,
+            },
+            {
+                "world": "b",
+                "seed": 1,
+                "safe_score": 0.80,
+                "budget_score": 0.10,
+                "task_safe": False,
+                "task_budget": True,
+            },
+            {
+                "world": "c",
+                "seed": 1,
+                "safe_score": 0.90,
+                "budget_score": 0.85,
+                "task_safe": False,
+                "task_budget": False,
+            },
+        ]
+        metrics = evaluate_transfer_decision_policy(
+            rows,
+            safe_score_key="safe_score",
+            budget_score_key="budget_score",
+            safe_threshold=0.20,
+            safe_direction="low",
+            safe_band=0.0,
+            budget_threshold=0.20,
+            budget_direction="low",
+            budget_band=0.0,
+            safe_label_key="task_safe",
+            budget_label_key="task_budget",
+            structured_violation_cost=5.0,
+            fallback_overbudget_cost=2.0,
+            escalate_needed_cost=1.0,
+            escalate_unneeded_cost=1.5,
+        )
+        self.assertAlmostEqual(metrics["average_cost"], 1.0 / 3.0)
+        self.assertAlmostEqual(metrics["always_fallback_cost"], 4.0 / 3.0)
+        self.assertAlmostEqual(metrics["always_escalate_cost"], (1.0 + 1.5 + 1.0) / 3.0)
+        self.assertEqual(metrics["action_rates"]["structured"], 1 / 3)
+        self.assertEqual(metrics["action_rates"]["fallback"], 1 / 3)
+        self.assertEqual(metrics["action_rates"]["escalate"], 1 / 3)
+
+    def test_cross_validate_transfer_decision_policy_works_by_group(self) -> None:
+        rows = [
+            {
+                "world": "a",
+                "seed": 1,
+                "variant": "operator_diag_residual",
+                "score_interaction": 0.10,
+                "score_residual": 0.10,
+                "score_joint_sum": 0.20,
+                "score_joint_prod": 0.01,
+                "task_safe": True,
+                "task_budget": False,
+            },
+            {
+                "world": "a",
+                "seed": 2,
+                "variant": "operator_diag_residual",
+                "score_interaction": 0.12,
+                "score_residual": 0.11,
+                "score_joint_sum": 0.23,
+                "score_joint_prod": 0.0132,
+                "task_safe": True,
+                "task_budget": False,
+            },
+            {
+                "world": "b",
+                "seed": 1,
+                "variant": "operator_diag_residual",
+                "score_interaction": 0.85,
+                "score_residual": 0.20,
+                "score_joint_sum": 1.05,
+                "score_joint_prod": 0.17,
+                "task_safe": False,
+                "task_budget": True,
+            },
+            {
+                "world": "b",
+                "seed": 2,
+                "variant": "operator_diag_residual",
+                "score_interaction": 0.88,
+                "score_residual": 0.21,
+                "score_joint_sum": 1.09,
+                "score_joint_prod": 0.1848,
+                "task_safe": False,
+                "task_budget": True,
+            },
+            {
+                "world": "c",
+                "seed": 1,
+                "variant": "operator_diag_residual",
+                "score_interaction": 0.92,
+                "score_residual": 0.40,
+                "score_joint_sum": 1.32,
+                "score_joint_prod": 0.368,
+                "task_safe": False,
+                "task_budget": False,
+            },
+            {
+                "world": "c",
+                "seed": 2,
+                "variant": "operator_diag_residual",
+                "score_interaction": 0.95,
+                "score_residual": 0.42,
+                "score_joint_sum": 1.37,
+                "score_joint_prod": 0.399,
+                "task_safe": False,
+                "task_budget": False,
+            },
+        ]
+        metrics = cross_validate_transfer_decision_policy(
+            rows,
+            group_key="world",
+            safe_score_keys=["score_residual", "score_joint_sum"],
+            budget_score_keys=["score_interaction", "score_joint_sum"],
+            safe_label_key="task_safe",
+            budget_label_key="task_budget",
+            structured_violation_cost=5.0,
+            fallback_overbudget_cost=2.0,
+            escalate_needed_cost=1.0,
+            escalate_unneeded_cost=1.5,
+        )
+        self.assertEqual(len(metrics["per_group"]), 3)
+        self.assertLess(metrics["average_cost_mean"], metrics["always_structured_cost_mean"])
+        self.assertLess(metrics["average_cost_mean"], metrics["always_fallback_cost_mean"])
+        self.assertLessEqual(metrics["average_cost_mean"], metrics["always_escalate_cost_mean"])
 
 
 if __name__ == "__main__":
