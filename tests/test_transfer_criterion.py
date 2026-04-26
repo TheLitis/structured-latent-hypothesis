@@ -8,6 +8,7 @@ from structured_latent_hypothesis.transfer_criterion import (
     cross_validate_abstain_by_group,
     cross_validate_classifier_by_group,
     cross_validate_transfer_decision_policy,
+    cross_validate_transfer_decision_policy_cost_shift,
     evaluate_cost_sensitive_threshold,
     evaluate_router,
     evaluate_cost_sensitive_abstain,
@@ -346,6 +347,74 @@ class TransferCriterionTests(unittest.TestCase):
         self.assertLess(metrics["average_cost_mean"], metrics["always_structured_cost_mean"])
         self.assertLess(metrics["average_cost_mean"], metrics["always_fallback_cost_mean"])
         self.assertLessEqual(metrics["average_cost_mean"], metrics["always_escalate_cost_mean"])
+
+    def test_transfer_decision_policy_cost_shift_uses_eval_costs(self) -> None:
+        rows = [
+            {
+                "world": "a",
+                "seed": 1,
+                "variant": "operator_diag_residual",
+                "score_interaction": 0.10,
+                "score_residual": 0.10,
+                "score_joint_sum": 0.20,
+                "score_joint_prod": 0.01,
+                "task_safe": True,
+                "task_budget": False,
+            },
+            {
+                "world": "a",
+                "seed": 2,
+                "variant": "operator_diag_residual",
+                "score_interaction": 0.12,
+                "score_residual": 0.11,
+                "score_joint_sum": 0.23,
+                "score_joint_prod": 0.0132,
+                "task_safe": True,
+                "task_budget": False,
+            },
+            {
+                "world": "b",
+                "seed": 1,
+                "variant": "operator_diag_residual",
+                "score_interaction": 0.85,
+                "score_residual": 0.20,
+                "score_joint_sum": 1.05,
+                "score_joint_prod": 0.17,
+                "task_safe": False,
+                "task_budget": True,
+            },
+            {
+                "world": "b",
+                "seed": 2,
+                "variant": "operator_diag_residual",
+                "score_interaction": 0.88,
+                "score_residual": 0.21,
+                "score_joint_sum": 1.09,
+                "score_joint_prod": 0.1848,
+                "task_safe": False,
+                "task_budget": True,
+            },
+        ]
+        metrics = cross_validate_transfer_decision_policy_cost_shift(
+            rows,
+            group_key="world",
+            safe_score_keys=["score_residual", "score_joint_sum"],
+            budget_score_keys=["score_interaction", "score_joint_sum"],
+            safe_label_key="task_safe",
+            budget_label_key="task_budget",
+            train_structured_violation_cost=5.0,
+            train_fallback_overbudget_cost=2.0,
+            train_escalate_needed_cost=1.0,
+            train_escalate_unneeded_cost=1.5,
+            eval_structured_violation_cost=9.0,
+            eval_fallback_overbudget_cost=4.0,
+            eval_escalate_needed_cost=0.5,
+            eval_escalate_unneeded_cost=1.0,
+        )
+        self.assertEqual(len(metrics["per_group"]), 2)
+        self.assertTrue(0.0 <= metrics["structured_rate_mean"] <= 1.0)
+        self.assertTrue(0.0 <= metrics["fallback_rate_mean"] <= 1.0)
+        self.assertAlmostEqual(metrics["always_escalate_cost_mean"], 0.75)
 
 
 if __name__ == "__main__":

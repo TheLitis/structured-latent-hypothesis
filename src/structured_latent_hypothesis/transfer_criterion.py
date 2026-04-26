@@ -1002,3 +1002,72 @@ def cross_validate_transfer_decision_policy(
         "fallback_rate_mean": sum(row["action_rates"]["fallback"] for row in per_group) / len(per_group),
         "escalate_rate_mean": sum(row["action_rates"]["escalate"] for row in per_group) / len(per_group),
     }
+
+
+def cross_validate_transfer_decision_policy_cost_shift(
+    rows: list[dict],
+    *,
+    group_key: str,
+    safe_score_keys: list[str],
+    budget_score_keys: list[str],
+    safe_label_key: str,
+    budget_label_key: str,
+    train_structured_violation_cost: float,
+    train_fallback_overbudget_cost: float,
+    train_escalate_needed_cost: float,
+    train_escalate_unneeded_cost: float,
+    eval_structured_violation_cost: float,
+    eval_fallback_overbudget_cost: float,
+    eval_escalate_needed_cost: float,
+    eval_escalate_unneeded_cost: float,
+) -> dict:
+    per_group: list[dict] = []
+    for group_value in sorted({row[group_key] for row in rows}):
+        train_rows = [row for row in rows if row[group_key] != group_value]
+        test_rows = [row for row in rows if row[group_key] == group_value]
+        selected = select_transfer_decision_policy(
+            train_rows,
+            safe_score_keys=safe_score_keys,
+            budget_score_keys=budget_score_keys,
+            safe_label_key=safe_label_key,
+            budget_label_key=budget_label_key,
+            structured_violation_cost=train_structured_violation_cost,
+            fallback_overbudget_cost=train_fallback_overbudget_cost,
+            escalate_needed_cost=train_escalate_needed_cost,
+            escalate_unneeded_cost=train_escalate_unneeded_cost,
+        )
+        metrics = evaluate_transfer_decision_policy(
+            test_rows,
+            safe_score_key=selected["safe_score_key"],
+            budget_score_key=selected["budget_score_key"],
+            safe_threshold=selected["safe_classifier"]["threshold"],
+            safe_direction=selected["safe_classifier"]["direction"],
+            safe_band=selected["safe_classifier"]["band"],
+            budget_threshold=selected["budget_classifier"]["threshold"],
+            budget_direction=selected["budget_classifier"]["direction"],
+            budget_band=selected["budget_classifier"]["band"],
+            safe_label_key=safe_label_key,
+            budget_label_key=budget_label_key,
+            structured_violation_cost=eval_structured_violation_cost,
+            fallback_overbudget_cost=eval_fallback_overbudget_cost,
+            escalate_needed_cost=eval_escalate_needed_cost,
+            escalate_unneeded_cost=eval_escalate_unneeded_cost,
+        )
+        metrics[group_key] = group_value
+        metrics["safe_score_key"] = selected["safe_score_key"]
+        metrics["budget_score_key"] = selected["budget_score_key"]
+        metrics["safe_band"] = selected["safe_classifier"]["band"]
+        metrics["budget_band"] = selected["budget_classifier"]["band"]
+        per_group.append(metrics)
+    return {
+        "per_group": per_group,
+        "average_cost_mean": sum(row["average_cost"] for row in per_group) / len(per_group),
+        "oracle_average_cost_mean": sum(row["oracle_average_cost"] for row in per_group) / len(per_group),
+        "regret_mean": sum(row["regret"] for row in per_group) / len(per_group),
+        "always_structured_cost_mean": sum(row["always_structured_cost"] for row in per_group) / len(per_group),
+        "always_fallback_cost_mean": sum(row["always_fallback_cost"] for row in per_group) / len(per_group),
+        "always_escalate_cost_mean": sum(row["always_escalate_cost"] for row in per_group) / len(per_group),
+        "structured_rate_mean": sum(row["action_rates"]["structured"] for row in per_group) / len(per_group),
+        "fallback_rate_mean": sum(row["action_rates"]["fallback"] for row in per_group) / len(per_group),
+        "escalate_rate_mean": sum(row["action_rates"]["escalate"] for row in per_group) / len(per_group),
+    }
