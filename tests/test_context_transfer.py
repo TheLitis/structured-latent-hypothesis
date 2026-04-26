@@ -27,8 +27,44 @@ class ContextTransferTest(unittest.TestCase):
         self.assertLess(float((commuting.frames - coupled.frames).abs().max().item()), 1e-8)
         self.assertLess(float((commuting.positions - coupled.positions).abs().max().item()), 1e-8)
 
+    def test_semireal_alpha_zero_anchor_matches_between_families(self) -> None:
+        commuting = generate_context_transfer_world(
+            ContextTransferConfig(
+                world="semireal_context_commuting_0.00",
+                variant="v",
+                seed=3,
+                model_type="commuting_operator",
+                image_size=12,
+                state_count=6,
+            )
+        )
+        coupled = generate_context_transfer_world(
+            ContextTransferConfig(
+                world="semireal_context_coupled_0.00",
+                variant="v",
+                seed=3,
+                model_type="commuting_operator",
+                image_size=12,
+                state_count=6,
+            )
+        )
+        self.assertLess(float((commuting.frames - coupled.frames).abs().max().item()), 1e-8)
+        self.assertLess(float((commuting.positions - coupled.positions).abs().max().item()), 1e-8)
+
     def test_metadata_is_monotone_on_coupled_family(self) -> None:
         worlds = [f"context_coupled_{alpha:0.2f}" for alpha in [0.00, 0.10, 0.20, 0.35, 0.50, 0.75, 1.00]]
+        comm = [ground_truth_context_commutator(world, context_count=5) for world in worlds]
+        coupling = [ground_truth_transfer_coupling(world, context_count=5) for world in worlds]
+        adaptation = [ground_truth_adaptation_cost_proxy(world, context_count=5) for world in worlds]
+        self.assertEqual(comm[0], 0.0)
+        self.assertEqual(coupling[0], 0.0)
+        self.assertEqual(adaptation[0], 0.0)
+        self.assertTrue(all(left <= right + 1e-9 for left, right in zip(comm, comm[1:])))
+        self.assertTrue(all(left <= right + 1e-9 for left, right in zip(coupling, coupling[1:])))
+        self.assertTrue(all(left <= right + 1e-9 for left, right in zip(adaptation, adaptation[1:])))
+
+    def test_semireal_metadata_is_monotone_on_coupled_family(self) -> None:
+        worlds = [f"semireal_context_coupled_{alpha:0.2f}" for alpha in [0.00, 0.20, 0.35, 0.75]]
         comm = [ground_truth_context_commutator(world, context_count=5) for world in worlds]
         coupling = [ground_truth_transfer_coupling(world, context_count=5) for world in worlds]
         adaptation = [ground_truth_adaptation_cost_proxy(world, context_count=5) for world in worlds]

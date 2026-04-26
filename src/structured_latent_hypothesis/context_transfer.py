@@ -44,7 +44,15 @@ def parse_context_world(world: str) -> tuple[str, float]:
         return "commuting", float(world[len("context_commuting_") :])
     if world.startswith("context_coupled_"):
         return "coupled", float(world[len("context_coupled_") :])
+    if world.startswith("semireal_context_commuting_"):
+        return "commuting", float(world[len("semireal_context_commuting_") :])
+    if world.startswith("semireal_context_coupled_"):
+        return "coupled", float(world[len("semireal_context_coupled_") :])
     raise ValueError(f"Unsupported context-transfer world: {world}")
+
+
+def is_semireal_context_world(world: str) -> bool:
+    return world.startswith("semireal_context_")
 
 
 def holdout_context_index(context_count: int) -> int:
@@ -157,6 +165,57 @@ def render_state(position: torch.Tensor, phase: float, alpha: float, image_size:
     return (scene + sensor).clamp(0.0, 1.0)
 
 
+def render_semireal_context_state(position: torch.Tensor, phase: float, alpha: float, image_size: int) -> torch.Tensor:
+    yy, xx = scene_coords(image_size)
+    params = style_parameters(phase, alpha)
+    px = float(position[0])
+    py = float(position[1])
+
+    floor = 0.34 + 0.08 * torch.sin(2.4 * math.pi * xx + 0.6 * phase)
+    wall = 0.28 + 0.12 * torch.cos(1.8 * math.pi * yy - params["background_shift"])
+    grain = 0.025 * torch.sin(10.0 * math.pi * (xx + 0.3 * yy)) + 0.018 * torch.cos(8.0 * math.pi * (yy - xx))
+    background = torch.stack(
+        [
+            floor + 0.08 * (xx + 1.0) + grain,
+            wall + 0.06 * (yy + 1.0) - 0.5 * grain,
+            0.30 + 0.06 * torch.sin(2.2 * math.pi * (xx - yy)) + 0.4 * grain,
+        ],
+        dim=0,
+    ).clamp(0.0, 1.0)
+
+    body = torch.exp(-(((xx - px) / 0.17) ** 2 + ((yy - py) / 0.13) ** 2) * 3.0)
+    core = torch.exp(-(((xx - px + 0.04) / 0.10) ** 2 + ((yy - py - 0.03) / 0.08) ** 2) * 4.5)
+    rim = torch.exp(-(((xx - px - 0.08) / 0.08) ** 2 + ((yy - py + 0.05) / 0.06) ** 2) * 4.0)
+    mask = body.clamp(0.0, 1.0)
+    texture = 0.55 + 0.45 * torch.sin(8.5 * math.pi * (xx - px) + 3.0 * torch.cos(2.0 * math.pi * (yy - py)))
+    warm = torch.tensor([0.82, 0.46, 0.24], dtype=torch.float32).view(3, 1, 1)
+    cool = torch.tensor([0.22, 0.58, 0.86], dtype=torch.float32).view(3, 1, 1)
+    accent = torch.tensor([0.96, 0.78, 0.34], dtype=torch.float32).view(3, 1, 1)
+    palette = params["palette_mix"] * warm + (1.0 - params["palette_mix"]) * cool
+    lighting = (0.76 + 0.24 * torch.sigmoid(4.0 * (xx + yy - px - py))).clamp(0.0, 1.0)
+    obj = palette * (0.58 + 0.42 * texture).unsqueeze(0) * lighting.unsqueeze(0)
+    obj = obj + 0.18 * core.unsqueeze(0) + accent * 0.12 * rim.unsqueeze(0)
+
+    shadow = torch.exp(-(((xx - px + 0.09) / 0.28) ** 2 + ((yy - py + 0.12) / 0.09) ** 2) * 2.4)
+    scene = background * (1.0 - 0.25 * shadow.unsqueeze(0))
+    scene = scene * (1.0 - mask.unsqueeze(0)) + obj * mask.unsqueeze(0)
+
+    occluder_center = -0.18 + params["occluder_shift"]
+    occluder = (torch.sigmoid((yy - occluder_center) * 28.0) - torch.sigmoid((yy - occluder_center - 0.10) * 28.0)).clamp(0.0, 1.0)
+    occluder_rgb = torch.tensor([0.14, 0.16, 0.18], dtype=torch.float32).view(3, 1, 1)
+    scene = scene * (1.0 - 0.22 * occluder.unsqueeze(0)) + occluder_rgb * 0.22 * occluder.unsqueeze(0)
+
+    sensor = torch.stack(
+        [
+            params["sensor_strength"] * torch.sin(5.0 * math.pi * xx + 1.5 * yy),
+            params["sensor_strength"] * torch.cos(4.0 * math.pi * yy - 1.2 * xx),
+            params["sensor_strength"] * torch.sin(3.5 * math.pi * (xx + yy) + phase),
+        ],
+        dim=0,
+    )
+    return (scene + sensor).clamp(0.0, 1.0)
+
+
 @dataclass
 class ContextTransferWorld:
     frames: torch.Tensor
@@ -200,11 +259,12 @@ def generate_context_transfer_world(config: ContextTransferConfig) -> ContextTra
             for action_index, action in enumerate(actions):
                 position = start.clone()
                 positions[context_index, state_index, action_index, 0] = position
-                frames[context_index, state_index, action_index, 0] = render_state(position, phase, alpha, config.image_size)
+                renderer = render_semireal_context_state if is_semireal_context_world(config.world) else render_state
+                frames[context_index, state_index, action_index, 0] = renderer(position, phase, alpha, config.image_size)
                 for step in range(config.rollout_length):
                     position = canonical_step(position, action, transform)
                     positions[context_index, state_index, action_index, step + 1] = position
-                    frames[context_index, state_index, action_index, step + 1] = render_state(position, phase, alpha, config.image_size)
+                    frames[context_index, state_index, action_index, step + 1] = renderer(position, phase, alpha, config.image_size)
 
     holdout_context = holdout_context_index(config.context_count)
     support_states = support_state_indices(config.state_count, config.support_fraction)
