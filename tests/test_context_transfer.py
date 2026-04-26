@@ -139,6 +139,8 @@ class ContextTransferTest(unittest.TestCase):
         )
         self.assertIn("adaptation", result)
         self.assertGreaterEqual(result["adaptation"]["steps_to_target"], 0)
+        self.assertEqual(len(result["adaptation"]["support_curve"]), 4)
+        self.assertEqual(len(result["adaptation"]["support_residual_curve"]), 4)
         self.assertTrue(torch.isfinite(torch.tensor(result["zero_shot_one_step_mse"])))
         self.assertTrue(torch.isfinite(torch.tensor(result["zero_shot_rollout3_mse"])))
 

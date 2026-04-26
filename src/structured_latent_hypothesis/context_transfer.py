@@ -647,11 +647,19 @@ def adapt_to_holdout_context(
         zero_pred, zero_latent = adapted.predict_next(query_images, query_contexts, query_actions)
         zero_query_mse = float(nn.functional.mse_loss(zero_pred, query_targets).item())
         zero_residual = float(adapted.interaction_norm(zero_latent, query_contexts, query_actions).mean().item())
+        zero_support_pred, zero_support_latent = adapted.predict_next(support_images, support_contexts, support_actions)
+        zero_support_mse = float(nn.functional.mse_loss(zero_support_pred, support_targets).item())
+        zero_support_residual = float(
+            adapted.interaction_norm(zero_support_latent, support_contexts, support_actions).mean().item()
+        )
 
     query_curve = [zero_query_mse]
+    support_curve = [zero_support_mse]
+    support_residual_curve = [zero_support_residual]
     best_query_mse = zero_query_mse
     best_residual_norm = zero_residual
-    support_final = zero_query_mse
+    support_final = zero_support_mse
+    support_final_objective = zero_support_mse
 
     for _ in range(config.adapt_steps):
         optimizer.zero_grad(set_to_none=True)
@@ -665,14 +673,22 @@ def adapt_to_holdout_context(
         optimizer.step()
 
         with torch.no_grad():
+            support_pred, support_latent = adapted.predict_next(support_images, support_contexts, support_actions)
+            support_mse = float(nn.functional.mse_loss(support_pred, support_targets).item())
+            support_residual = float(
+                adapted.interaction_norm(support_latent, support_contexts, support_actions).mean().item()
+            )
             query_pred, query_latent = adapted.predict_next(query_images, query_contexts, query_actions)
             query_mse = float(nn.functional.mse_loss(query_pred, query_targets).item())
             residual_norm = float(adapted.interaction_norm(query_latent, query_contexts, query_actions).mean().item())
+            support_curve.append(support_mse)
+            support_residual_curve.append(support_residual)
             query_curve.append(query_mse)
             if query_mse < best_query_mse - 1e-12:
                 best_query_mse = query_mse
                 best_residual_norm = residual_norm
-            support_final = float(total_loss.item())
+            support_final = support_mse
+            support_final_objective = float(total_loss.item())
 
     possible_gain = max(0.0, zero_query_mse - best_query_mse)
     target = zero_query_mse - 0.8 * possible_gain if possible_gain > 1e-12 else zero_query_mse
@@ -691,7 +707,11 @@ def adapt_to_holdout_context(
         "adaptation_gain": zero_query_mse - best_query_mse,
         "steps_to_target": int(steps_to_target),
         "residual_norm_final": best_residual_norm,
-        "support_final_objective": support_final,
+        "zero_shot_support_mse": zero_support_mse,
+        "support_final_mse": support_final,
+        "support_final_objective": support_final_objective,
+        "support_curve": support_curve,
+        "support_residual_curve": support_residual_curve,
         "query_curve": query_curve,
     }
 
