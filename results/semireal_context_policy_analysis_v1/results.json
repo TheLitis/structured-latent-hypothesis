@@ -1,0 +1,300 @@
+{
+  "budget": 8,
+  "regret_tolerance": 1e-05,
+  "safe_label_key": "task_safe_regret_1e-05",
+  "budget_label_key": "task_within_budget_8",
+  "cross_validation": {
+    "seed": {
+      "metrics": {
+        "average_cost_mean": 1.09375,
+        "oracle_average_cost_mean": 0.03125,
+        "regret_mean": 1.0625,
+        "always_structured_cost_mean": 2.8125,
+        "always_fallback_cost_mean": 0.1875,
+        "always_escalate_cost_mean": 0.96875,
+        "structured_rate_mean": 0.5,
+        "fallback_rate_mean": 0.0,
+        "escalate_rate_mean": 0.5,
+        "per_group": [
+          {
+            "average_cost": 1.25,
+            "oracle_average_cost": 0.0,
+            "regret": 1.25,
+            "always_structured_cost": 1.25,
+            "always_fallback_cost": 0.0,
+            "always_escalate_cost": 1.0,
+            "action_rates": {
+              "structured": 1.0,
+              "fallback": 0.0,
+              "escalate": 0.0
+            },
+            "seed": 3,
+            "safe_score_key": "score_joint_sum",
+            "budget_score_key": "score_joint_sum",
+            "safe_band": 0.00033492841612314805,
+            "budget_band": 0.0
+          },
+          {
+            "average_cost": 0.9375,
+            "oracle_average_cost": 0.0625,
+            "regret": 0.875,
+            "always_structured_cost": 4.375,
+            "always_fallback_cost": 0.375,
+            "always_escalate_cost": 0.9375,
+            "action_rates": {
+              "structured": 0.0,
+              "fallback": 0.0,
+              "escalate": 1.0
+            },
+            "seed": 11,
+            "safe_score_key": "score_joint_sum",
+            "budget_score_key": "score_interaction",
+            "safe_band": 0.0,
+            "budget_band": 0.0
+          }
+        ]
+      },
+      "best_trivial_cost": 0.1875,
+      "delta_to_best_trivial": 0.90625,
+      "wins": false
+    },
+    "world": {
+      "metrics": {
+        "average_cost_mean": 1.0,
+        "oracle_average_cost_mean": 0.03125,
+        "regret_mean": 0.96875,
+        "always_structured_cost_mean": 2.8125,
+        "always_fallback_cost_mean": 0.1875,
+        "always_escalate_cost_mean": 0.96875,
+        "structured_rate_mean": 0.5625,
+        "fallback_rate_mean": 0.375,
+        "escalate_rate_mean": 0.0625,
+        "per_group": [
+          {
+            "average_cost": 0.0,
+            "oracle_average_cost": 0.0,
+            "regret": 0.0,
+            "always_structured_cost": 2.5,
+            "always_fallback_cost": 0.0,
+            "always_escalate_cost": 1.0,
+            "action_rates": {
+              "structured": 0.5,
+              "fallback": 0.5,
+              "escalate": 0.0
+            },
+            "world": "semireal_context_commuting_0.00",
+            "safe_score_key": "score_joint_sum",
+            "budget_score_key": "score_interaction",
+            "safe_band": 0.0,
+            "budget_band": 0.0
+          },
+          {
+            "average_cost": 0.0,
+            "oracle_average_cost": 0.0,
+            "regret": 0.0,
+            "always_structured_cost": 0.0,
+            "always_fallback_cost": 0.0,
+            "always_escalate_cost": 1.0,
+            "action_rates": {
+              "structured": 0.5,
+              "fallback": 0.5,
+              "escalate": 0.0
+            },
+            "world": "semireal_context_commuting_0.20",
+            "safe_score_key": "score_joint_sum",
+            "budget_score_key": "score_interaction",
+            "safe_band": 0.0,
+            "budget_band": 0.0
+          },
+          {
+            "average_cost": 0.5,
+            "oracle_average_cost": 0.0,
+            "regret": 0.5,
+            "always_structured_cost": 2.5,
+            "always_fallback_cost": 0.0,
+            "always_escalate_cost": 1.0,
+            "action_rates": {
+              "structured": 0.5,
+              "fallback": 0.0,
+              "escalate": 0.5
+            },
+            "world": "semireal_context_commuting_0.35",
+            "safe_score_key": "score_joint_sum",
+            "budget_score_key": "score_joint_prod",
+            "safe_band": 0.0,
+            "budget_band": 0.0
+          },
+          {
+            "average_cost": 2.5,
+            "oracle_average_cost": 0.0,
+            "regret": 2.5,
+            "always_structured_cost": 5.0,
+            "always_fallback_cost": 0.0,
+            "always_escalate_cost": 1.0,
+            "action_rates": {
+              "structured": 0.5,
+              "fallback": 0.5,
+              "escalate": 0.0
+            },
+            "world": "semireal_context_commuting_0.75",
+            "safe_score_key": "score_joint_sum",
+            "budget_score_key": "score_joint_prod",
+            "safe_band": 0.0,
+            "budget_band": 0.0
+          },
+          {
+            "average_cost": 0.0,
+            "oracle_average_cost": 0.0,
+            "regret": 0.0,
+            "always_structured_cost": 2.5,
+            "always_fallback_cost": 0.0,
+            "always_escalate_cost": 1.0,
+            "action_rates": {
+              "structured": 0.5,
+              "fallback": 0.5,
+              "escalate": 0.0
+            },
+            "world": "semireal_context_coupled_0.00",
+            "safe_score_key": "score_joint_sum",
+            "budget_score_key": "score_interaction",
+            "safe_band": 0.0,
+            "budget_band": 0.0
+          },
+          {
+            "average_cost": 0.0,
+            "oracle_average_cost": 0.0,
+            "regret": 0.0,
+            "always_structured_cost": 2.5,
+            "always_fallback_cost": 0.0,
+            "always_escalate_cost": 1.0,
+            "action_rates": {
+              "structured": 0.5,
+              "fallback": 0.5,
+              "escalate": 0.0
+            },
+            "world": "semireal_context_coupled_0.20",
+            "safe_score_key": "score_joint_sum",
+            "budget_score_key": "score_joint_prod",
+            "safe_band": 0.0,
+            "budget_band": 0.0
+          },
+          {
+            "average_cost": 0.0,
+            "oracle_average_cost": 0.0,
+            "regret": 0.0,
+            "always_structured_cost": 2.5,
+            "always_fallback_cost": 0.0,
+            "always_escalate_cost": 1.0,
+            "action_rates": {
+              "structured": 0.5,
+              "fallback": 0.5,
+              "escalate": 0.0
+            },
+            "world": "semireal_context_coupled_0.35",
+            "safe_score_key": "score_joint_sum",
+            "budget_score_key": "score_joint_prod",
+            "safe_band": 0.0,
+            "budget_band": 0.0
+          },
+          {
+            "average_cost": 5.0,
+            "oracle_average_cost": 0.25,
+            "regret": 4.75,
+            "always_structured_cost": 5.0,
+            "always_fallback_cost": 1.5,
+            "always_escalate_cost": 0.75,
+            "action_rates": {
+              "structured": 1.0,
+              "fallback": 0.0,
+              "escalate": 0.0
+            },
+            "world": "semireal_context_coupled_0.75",
+            "safe_score_key": "score_joint_sum",
+            "budget_score_key": "score_interaction",
+            "safe_band": 0.0,
+            "budget_band": 0.0
+          }
+        ]
+      },
+      "best_trivial_cost": 0.1875,
+      "delta_to_best_trivial": 0.8125,
+      "wins": false
+    },
+    "family": {
+      "metrics": {
+        "average_cost_mean": 0.75,
+        "oracle_average_cost_mean": 0.03125,
+        "regret_mean": 0.71875,
+        "always_structured_cost_mean": 2.8125,
+        "always_fallback_cost_mean": 0.1875,
+        "always_escalate_cost_mean": 0.96875,
+        "structured_rate_mean": 0.25,
+        "fallback_rate_mean": 0.5,
+        "escalate_rate_mean": 0.25,
+        "per_group": [
+          {
+            "average_cost": 1.0,
+            "oracle_average_cost": 0.0,
+            "regret": 1.0,
+            "always_structured_cost": 2.5,
+            "always_fallback_cost": 0.0,
+            "always_escalate_cost": 1.0,
+            "action_rates": {
+              "structured": 0.5,
+              "fallback": 0.125,
+              "escalate": 0.375
+            },
+            "family": "commuting",
+            "safe_score_key": "score_joint_sum",
+            "budget_score_key": "score_interaction",
+            "safe_band": 0.0,
+            "budget_band": 0.0
+          },
+          {
+            "average_cost": 0.5,
+            "oracle_average_cost": 0.0625,
+            "regret": 0.4375,
+            "always_structured_cost": 3.125,
+            "always_fallback_cost": 0.375,
+            "always_escalate_cost": 0.9375,
+            "action_rates": {
+              "structured": 0.0,
+              "fallback": 0.875,
+              "escalate": 0.125
+            },
+            "family": "coupled",
+            "safe_score_key": "score_joint_sum",
+            "budget_score_key": "score_interaction",
+            "safe_band": 0.000400080403778702,
+            "budget_band": 0.0
+          }
+        ]
+      },
+      "best_trivial_cost": 0.1875,
+      "delta_to_best_trivial": 0.5625,
+      "wins": false
+    }
+  },
+  "score_correlations": {
+    "score_interaction": {
+      "structured_rollout5_regret": -0.4778761061946903,
+      "full_adaptation_steps": 0.28714187249866857,
+      "structured_adaptation_steps": -0.22485183666562406
+    },
+    "score_residual": {
+      "structured_rollout5_regret": -0.45427728613569324,
+      "full_adaptation_steps": 0.4557807499978866,
+      "structured_adaptation_steps": -0.2886611416653282
+    },
+    "score_joint_sum": {
+      "structured_rollout5_regret": -0.4365781710914454,
+      "full_adaptation_steps": 0.3874136374982036,
+      "structured_adaptation_steps": -0.26891064249875307
+    },
+    "score_joint_prod": {
+      "structured_rollout5_regret": -0.44542772861356933,
+      "full_adaptation_steps": 0.28714187249866857,
+      "structured_adaptation_steps": -0.21421695249900669
+    }
+  }
+}
