@@ -162,3 +162,175 @@ def summarize_binary_labels(rows: list[dict]) -> dict[str, float]:
         "safe_rate": mean([float(row["task_safe"]) for row in rows]) if rows else 0.0,
         "budget_rate": mean([float(row["task_budget"]) for row in rows]) if rows else 0.0,
     }
+
+
+def percentile_rank(value: float, reference_values: list[float]) -> float:
+    if not reference_values:
+        return 0.5
+    less = sum(1 for ref in reference_values if ref < value)
+    equal = sum(1 for ref in reference_values if ref == value)
+    return (less + 0.5 * equal) / len(reference_values)
+
+
+def add_rank_features(
+    rows: list[dict],
+    *,
+    score_keys: list[str],
+    reference_rows: list[dict] | None = None,
+    prefix: str = "rank_",
+) -> list[dict]:
+    reference = reference_rows if reference_rows is not None else rows
+    reference_values = {
+        score_key: [float(row[score_key]) for row in reference]
+        for score_key in score_keys
+    }
+    ranked: list[dict] = []
+    for row in rows:
+        updated = dict(row)
+        for score_key in score_keys:
+            updated[f"{prefix}{score_key}"] = percentile_rank(float(row[score_key]), reference_values[score_key])
+        ranked.append(updated)
+    return ranked
+
+
+def best_trivial_policy_cost(metrics: dict) -> float:
+    keys = ("always_structured_cost", "always_fallback_cost", "always_escalate_cost")
+    if all(key in metrics for key in keys):
+        return min(float(metrics[key]) for key in keys)
+    mean_keys = ("always_structured_cost_mean", "always_fallback_cost_mean", "always_escalate_cost_mean")
+    return min(float(metrics[key]) for key in mean_keys)
+
+
+def evaluate_policy_against_trivial(metrics: dict) -> dict:
+    best_trivial = best_trivial_policy_cost(metrics)
+    average_cost = float(metrics.get("average_cost", metrics.get("average_cost_mean")))
+    return {
+        "best_trivial_cost": best_trivial,
+        "delta_to_best_trivial": average_cost - best_trivial,
+        "wins_best_trivial": average_cost < best_trivial - 1e-12,
+    }
+
+
+def evaluate_rank_external_transfer(
+    synthetic_rows: list[dict],
+    target_rows: list[dict],
+    *,
+    raw_safe_score_keys: list[str],
+    raw_budget_score_keys: list[str],
+    structured_violation_cost: float,
+    fallback_overbudget_cost: float,
+    escalate_needed_cost: float,
+    escalate_unneeded_cost: float,
+) -> dict:
+    raw_keys = sorted(set(raw_safe_score_keys + raw_budget_score_keys))
+    synthetic_ranked = add_rank_features(synthetic_rows, score_keys=raw_keys)
+    target_ranked = add_rank_features(target_rows, score_keys=raw_keys)
+    safe_score_keys = [f"rank_{key}" for key in raw_safe_score_keys]
+    budget_score_keys = [f"rank_{key}" for key in raw_budget_score_keys]
+    selected = select_transfer_decision_policy(
+        synthetic_ranked,
+        safe_score_keys=safe_score_keys,
+        budget_score_keys=budget_score_keys,
+        safe_label_key="task_safe",
+        budget_label_key="task_budget",
+        structured_violation_cost=structured_violation_cost,
+        fallback_overbudget_cost=fallback_overbudget_cost,
+        escalate_needed_cost=escalate_needed_cost,
+        escalate_unneeded_cost=escalate_unneeded_cost,
+    )
+    metrics = evaluate_transfer_decision_policy(
+        target_ranked,
+        safe_score_key=selected["safe_score_key"],
+        budget_score_key=selected["budget_score_key"],
+        safe_threshold=selected["safe_classifier"]["threshold"],
+        safe_direction=selected["safe_classifier"]["direction"],
+        safe_band=selected["safe_classifier"]["band"],
+        budget_threshold=selected["budget_classifier"]["threshold"],
+        budget_direction=selected["budget_classifier"]["direction"],
+        budget_band=selected["budget_classifier"]["band"],
+        safe_label_key="task_safe",
+        budget_label_key="task_budget",
+        structured_violation_cost=structured_violation_cost,
+        fallback_overbudget_cost=fallback_overbudget_cost,
+        escalate_needed_cost=escalate_needed_cost,
+        escalate_unneeded_cost=escalate_unneeded_cost,
+    )
+    comparison = evaluate_policy_against_trivial(metrics)
+    return {
+        "selected": selected,
+        "metrics": {key: value for key, value in metrics.items() if key != "per_row"},
+        "per_row": metrics["per_row"],
+        **comparison,
+    }
+
+
+def cross_validate_rank_calibrated_transfer(
+    target_rows: list[dict],
+    *,
+    group_key: str,
+    raw_safe_score_keys: list[str],
+    raw_budget_score_keys: list[str],
+    structured_violation_cost: float,
+    fallback_overbudget_cost: float,
+    escalate_needed_cost: float,
+    escalate_unneeded_cost: float,
+    source_rows: list[dict] | None = None,
+) -> dict:
+    raw_keys = sorted(set(raw_safe_score_keys + raw_budget_score_keys))
+    safe_score_keys = [f"rank_{key}" for key in raw_safe_score_keys]
+    budget_score_keys = [f"rank_{key}" for key in raw_budget_score_keys]
+    per_group: list[dict] = []
+    for group_value in sorted({row[group_key] for row in target_rows}):
+        calibration_rows = [row for row in target_rows if row[group_key] != group_value]
+        test_rows = [row for row in target_rows if row[group_key] == group_value]
+        calibration_ranked = add_rank_features(calibration_rows, score_keys=raw_keys)
+        test_ranked = add_rank_features(test_rows, score_keys=raw_keys, reference_rows=calibration_rows)
+        if source_rows is not None:
+            source_ranked = add_rank_features(source_rows, score_keys=raw_keys)
+            train_rows = source_ranked + calibration_ranked
+        else:
+            train_rows = calibration_ranked
+        selected = select_transfer_decision_policy(
+            train_rows,
+            safe_score_keys=safe_score_keys,
+            budget_score_keys=budget_score_keys,
+            safe_label_key="task_safe",
+            budget_label_key="task_budget",
+            structured_violation_cost=structured_violation_cost,
+            fallback_overbudget_cost=fallback_overbudget_cost,
+            escalate_needed_cost=escalate_needed_cost,
+            escalate_unneeded_cost=escalate_unneeded_cost,
+        )
+        metrics = evaluate_transfer_decision_policy(
+            test_ranked,
+            safe_score_key=selected["safe_score_key"],
+            budget_score_key=selected["budget_score_key"],
+            safe_threshold=selected["safe_classifier"]["threshold"],
+            safe_direction=selected["safe_classifier"]["direction"],
+            safe_band=selected["safe_classifier"]["band"],
+            budget_threshold=selected["budget_classifier"]["threshold"],
+            budget_direction=selected["budget_classifier"]["direction"],
+            budget_band=selected["budget_classifier"]["band"],
+            safe_label_key="task_safe",
+            budget_label_key="task_budget",
+            structured_violation_cost=structured_violation_cost,
+            fallback_overbudget_cost=fallback_overbudget_cost,
+            escalate_needed_cost=escalate_needed_cost,
+            escalate_unneeded_cost=escalate_unneeded_cost,
+        )
+        metrics[group_key] = group_value
+        metrics["safe_score_key"] = selected["safe_score_key"]
+        metrics["budget_score_key"] = selected["budget_score_key"]
+        per_group.append(metrics)
+    return {
+        "per_group": [{key: value for key, value in row.items() if key != "per_row"} for row in per_group],
+        "average_cost_mean": mean([float(row["average_cost"]) for row in per_group]),
+        "oracle_average_cost_mean": mean([float(row["oracle_average_cost"]) for row in per_group]),
+        "regret_mean": mean([float(row["regret"]) for row in per_group]),
+        "always_structured_cost_mean": mean([float(row["always_structured_cost"]) for row in per_group]),
+        "always_fallback_cost_mean": mean([float(row["always_fallback_cost"]) for row in per_group]),
+        "always_escalate_cost_mean": mean([float(row["always_escalate_cost"]) for row in per_group]),
+        "structured_rate_mean": mean([float(row["action_rates"]["structured"]) for row in per_group]),
+        "fallback_rate_mean": mean([float(row["action_rates"]["fallback"]) for row in per_group]),
+        "escalate_rate_mean": mean([float(row["action_rates"]["escalate"]) for row in per_group]),
+    }
