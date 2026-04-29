@@ -1,54 +1,66 @@
 # structured-latent-hypothesis
 
-Structured experiments around the **Commutative Flatness Prior (CFP)**:
+This repository started from a simple three-point geometric observation and tested whether its mixed-difference / commutator structure could become a useful ML principle.
 
-> if useful representations are locally additive across independent factors, then penalizing mixed finite differences should improve compositional generalization.
+The original global claim is now **closed as unsupported**:
 
-This repository starts from a simple geometric observation and turns it into a falsifiable ML hypothesis. The current focus is deliberately narrow:
+- strict affine lattice / equal spacing did not survive;
+- CFP was not a universal latent prior;
+- optimizer-geometry and structured-latent variants did not clear their gates;
+- support-commutator routing was beaten by simpler support-validation and router-margin baselines.
 
-1. validate CFP on synthetic worlds where factors are commutative,
-2. test negative controls where the factors are order-sensitive,
-3. measure whether the gain is specific to commutative structure rather than generic smoothness.
+The active project has pivoted to:
 
-## Working Hypothesis
+> **support-calibrated adaptive routing under context shift**
 
-For a latent grid `z_{n,k}`, CFP encourages:
+The practical question is no longer "does the three-point law define a new latent space?" It is:
+
+> Given a small support set in a new context, can we choose safely between a structured branch, a fallback branch, and escalation?
+
+## Current Status
+
+The strongest current result is the baseline gauntlet:
+
+- source-only synthetic-to-semi-real transfer still fails;
+- target calibration is useful;
+- `validation_loss`, `conformal_validation_rank`, and `router_margin` beat the triple-derived support-commutator criterion;
+- the useful mechanism is support-set model selection, not the original commutator score.
+
+See:
+
+- `reports/2026-04-29_support_contrast_baseline_gauntlet_v1_findings.md`
+- `results/support_contrast_baseline_gauntlet_v1/summary.md`
+
+## Active Research Claim
+
+The new claim is deliberately narrower:
+
+> A small target-domain support set can calibrate a deployable routing policy that chooses between structured transfer, fallback adaptation, and escalation under context shift.
+
+This is useful only if it beats trivial policies and remains stable across:
+
+- held-out worlds,
+- seeds,
+- context families,
+- deployment cost models.
+
+## Closed Claim
+
+The original three-point observation remains documented as project origin, but it is not the active claim.
+
+It led to the mixed finite difference:
 
 `Delta_i Delta_j z ~= 0`
 
-which is the discrete statement that factor steps approximately commute. In the exact case, this implies an additive decomposition:
+which is the discrete statement that factor steps approximately commute. This was a useful hypothesis generator, but not a winning decision criterion in the current context-transfer benchmarks.
 
-`z_n = c + sum_i g_i(n_i)`
+## Important Artifacts
 
-The repository does **not** assume this replaces dense layers or standard optimizers. The practical claim is narrower:
-
-- CFP may act as a useful inductive bias for structured latent spaces.
-- It should help most when data factors are approximately compositional.
-- It should help less, or fail cleanly, on non-commutative controls.
-
-## Origin Sketch
-
-The project started from a simple repeated-point construction rendered directly from code:
-
-![Triplet construction](docs/figures/triplet_construction.png)
-
-![Diagonal subsequence pattern](docs/figures/diagonal_subsequence.png)
-
-## What Is Implemented
-
-- `docs/research_note.md`: condensed statement of the hypothesis, claims, and evaluation rules.
-- `src/structured_latent_hypothesis/synthetic.py`: synthetic benchmarks and CFP regularizers.
-- `scripts/run_synthetic.py`: initial baseline benchmark.
-- `scripts/run_cfp_sweep.py`: lambda sweep with holdout-cell diagnostics.
-- `scripts/run_commutator_ladder.py`: matched-family ladders with ground-truth commutator metadata.
-- `scripts/render_origin_figures.py`: reproducible origin figures for the repository.
-
-The current benchmark families include:
-
-- `commutative`: horizontal translation + brightness scaling
-- `noncommutative`: asymmetric spatial windowing + rotation
-- `matched ramp ladder`: horizontal shift + position-dependent intensity ramp
-- `matched scale ladder`: horizontal shift + center scaling
+- `docs/research_note.md`: historical CFP note.
+- `reports/2026-04-29_project_pivot_support_calibrated_routing.md`: pivot report.
+- `scripts/run_support_contrast_baseline_gauntlet.py`: strict baseline comparison that closed the unique commutator claim.
+- `scripts/run_support_routing_cost_robustness.py`: active support-routing cost robustness probe.
+- `src/structured_latent_hypothesis/support_contrast.py`: support-set feature extraction and decision-policy helpers.
 
 ## Quick Start
 
@@ -56,17 +68,10 @@ The current benchmark families include:
 python -m venv .venv
 .venv\Scripts\python -m pip install --upgrade pip
 .venv\Scripts\python -m pip install -e .
-.venv\Scripts\python .\scripts\render_origin_figures.py
-.venv\Scripts\python .\scripts\run_synthetic.py --output-json .\results\initial_synthetic.json --output-markdown .\results\initial_synthetic.md
+.venv\Scripts\python .\scripts\run_support_contrast_baseline_gauntlet.py
+.venv\Scripts\python .\scripts\run_support_routing_cost_robustness.py
 ```
 
-## Success Criteria
+## Research Rule
 
-The claim is supported only if CFP:
-
-- improves held-out composition performance in commutative or near-commutative worlds,
-- reduces commutativity error,
-- remains stable across several seeds,
-- loses the advantage as true non-commutativity grows.
-
-If the prior helps both worlds equally, it is probably acting as generic smoothing rather than as a structure-aware bias.
+No claim survives because it is mathematically elegant. A claim survives only if it beats strong baselines under the same calibration, cost, and holdout protocol.

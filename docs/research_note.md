@@ -1,5 +1,17 @@
 # Commutative Flatness Prior
 
+## 2026-04-29 Status
+
+This note is historical. The CFP / three-point geometry branch is closed as the active project claim.
+
+The current active direction is **support-calibrated adaptive routing under context shift**. See:
+
+- `README.md`
+- `reports/2026-04-29_project_pivot_support_calibrated_routing.md`
+- `reports/2026-04-29_support_contrast_baseline_gauntlet_v1_findings.md`
+
+The mixed finite difference remains useful as project origin and as a possible diagnostic feature, but it is not currently the best routing criterion.
+
 ## Positioning
 
 This repository treats the original geometric construction as a starting point for a **research hypothesis**, not as an established law of optimization.
