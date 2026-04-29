@@ -211,24 +211,23 @@ def evaluate_policy_against_trivial(metrics: dict) -> dict:
     }
 
 
-def evaluate_rank_external_transfer(
-    synthetic_rows: list[dict],
-    target_rows: list[dict],
+def compact_transfer_metrics(metrics: dict) -> dict:
+    return {key: value for key, value in metrics.items() if key != "per_row"}
+
+
+def select_and_evaluate_transfer_policy(
+    train_rows: list[dict],
+    test_rows: list[dict],
     *,
-    raw_safe_score_keys: list[str],
-    raw_budget_score_keys: list[str],
+    safe_score_keys: list[str],
+    budget_score_keys: list[str],
     structured_violation_cost: float,
     fallback_overbudget_cost: float,
     escalate_needed_cost: float,
     escalate_unneeded_cost: float,
 ) -> dict:
-    raw_keys = sorted(set(raw_safe_score_keys + raw_budget_score_keys))
-    synthetic_ranked = add_rank_features(synthetic_rows, score_keys=raw_keys)
-    target_ranked = add_rank_features(target_rows, score_keys=raw_keys)
-    safe_score_keys = [f"rank_{key}" for key in raw_safe_score_keys]
-    budget_score_keys = [f"rank_{key}" for key in raw_budget_score_keys]
     selected = select_transfer_decision_policy(
-        synthetic_ranked,
+        train_rows,
         safe_score_keys=safe_score_keys,
         budget_score_keys=budget_score_keys,
         safe_label_key="task_safe",
@@ -239,7 +238,7 @@ def evaluate_rank_external_transfer(
         escalate_unneeded_cost=escalate_unneeded_cost,
     )
     metrics = evaluate_transfer_decision_policy(
-        target_ranked,
+        test_rows,
         safe_score_key=selected["safe_score_key"],
         budget_score_key=selected["budget_score_key"],
         safe_threshold=selected["safe_classifier"]["threshold"],
@@ -258,10 +257,66 @@ def evaluate_rank_external_transfer(
     comparison = evaluate_policy_against_trivial(metrics)
     return {
         "selected": selected,
-        "metrics": {key: value for key, value in metrics.items() if key != "per_row"},
+        "metrics": compact_transfer_metrics(metrics),
         "per_row": metrics["per_row"],
         **comparison,
     }
+
+
+def evaluate_rank_calibrated_policy(
+    calibration_rows: list[dict],
+    test_rows: list[dict],
+    *,
+    raw_safe_score_keys: list[str],
+    raw_budget_score_keys: list[str],
+    structured_violation_cost: float,
+    fallback_overbudget_cost: float,
+    escalate_needed_cost: float,
+    escalate_unneeded_cost: float,
+    source_rows: list[dict] | None = None,
+) -> dict:
+    raw_keys = sorted(set(raw_safe_score_keys + raw_budget_score_keys))
+    calibration_ranked = add_rank_features(calibration_rows, score_keys=raw_keys)
+    test_ranked = add_rank_features(test_rows, score_keys=raw_keys, reference_rows=calibration_rows)
+    train_rows = calibration_ranked
+    if source_rows is not None:
+        train_rows = add_rank_features(source_rows, score_keys=raw_keys) + calibration_ranked
+    return select_and_evaluate_transfer_policy(
+        train_rows,
+        test_ranked,
+        safe_score_keys=[f"rank_{key}" for key in raw_safe_score_keys],
+        budget_score_keys=[f"rank_{key}" for key in raw_budget_score_keys],
+        structured_violation_cost=structured_violation_cost,
+        fallback_overbudget_cost=fallback_overbudget_cost,
+        escalate_needed_cost=escalate_needed_cost,
+        escalate_unneeded_cost=escalate_unneeded_cost,
+    )
+
+
+def evaluate_rank_external_transfer(
+    synthetic_rows: list[dict],
+    target_rows: list[dict],
+    *,
+    raw_safe_score_keys: list[str],
+    raw_budget_score_keys: list[str],
+    structured_violation_cost: float,
+    fallback_overbudget_cost: float,
+    escalate_needed_cost: float,
+    escalate_unneeded_cost: float,
+) -> dict:
+    raw_keys = sorted(set(raw_safe_score_keys + raw_budget_score_keys))
+    synthetic_ranked = add_rank_features(synthetic_rows, score_keys=raw_keys)
+    target_ranked = add_rank_features(target_rows, score_keys=raw_keys)
+    return select_and_evaluate_transfer_policy(
+        synthetic_ranked,
+        target_ranked,
+        safe_score_keys=[f"rank_{key}" for key in raw_safe_score_keys],
+        budget_score_keys=[f"rank_{key}" for key in raw_budget_score_keys],
+        structured_violation_cost=structured_violation_cost,
+        fallback_overbudget_cost=fallback_overbudget_cost,
+        escalate_needed_cost=escalate_needed_cost,
+        escalate_unneeded_cost=escalate_unneeded_cost,
+    )
 
 
 def cross_validate_rank_calibrated_transfer(

@@ -5,9 +5,11 @@ from structured_latent_hypothesis.support_contrast import (
     build_support_contrast_rows,
     cross_validate_rank_calibrated_transfer,
     curve_value,
+    evaluate_rank_calibrated_policy,
     evaluate_rank_external_transfer,
     percentile_rank,
     safe_ratio,
+    select_and_evaluate_transfer_policy,
 )
 
 
@@ -96,6 +98,47 @@ class SupportContrastTests(unittest.TestCase):
         )
         self.assertEqual(len(metrics["per_group"]), 2)
         self.assertTrue(0.0 <= metrics["structured_rate_mean"] <= 1.0)
+
+    def test_select_and_evaluate_transfer_policy_compares_to_trivial(self) -> None:
+        train_rows = [
+            {"world": "a", "seed": 1, "score_a": 0.1, "score_b": 0.1, "task_safe": True, "task_budget": False},
+            {"world": "b", "seed": 1, "score_a": 0.9, "score_b": 0.9, "task_safe": False, "task_budget": True},
+        ]
+        result = select_and_evaluate_transfer_policy(
+            train_rows,
+            train_rows,
+            safe_score_keys=["score_a"],
+            budget_score_keys=["score_b"],
+            structured_violation_cost=5.0,
+            fallback_overbudget_cost=3.0,
+            escalate_needed_cost=0.5,
+            escalate_unneeded_cost=1.0,
+        )
+        self.assertIn("best_trivial_cost", result)
+        self.assertEqual(len(result["per_row"]), 2)
+
+    def test_evaluate_rank_calibrated_policy_supports_source_rows(self) -> None:
+        calibration = [
+            {"world": "a", "seed": 1, "score_a": 0.1, "score_b": 0.1, "task_safe": True, "task_budget": False},
+            {"world": "b", "seed": 1, "score_a": 0.9, "score_b": 0.9, "task_safe": False, "task_budget": True},
+        ]
+        test = [
+            {"world": "c", "seed": 1, "score_a": 0.2, "score_b": 0.2, "task_safe": True, "task_budget": False},
+            {"world": "d", "seed": 1, "score_a": 0.8, "score_b": 0.8, "task_safe": False, "task_budget": True},
+        ]
+        result = evaluate_rank_calibrated_policy(
+            calibration,
+            test,
+            raw_safe_score_keys=["score_a"],
+            raw_budget_score_keys=["score_b"],
+            structured_violation_cost=5.0,
+            fallback_overbudget_cost=3.0,
+            escalate_needed_cost=0.5,
+            escalate_unneeded_cost=1.0,
+            source_rows=calibration,
+        )
+        self.assertIn("delta_to_best_trivial", result)
+        self.assertEqual(len(result["per_row"]), 2)
 
 
 if __name__ == "__main__":
