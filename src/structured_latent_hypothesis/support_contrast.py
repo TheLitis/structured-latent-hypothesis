@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from statistics import mean
+import math
+from statistics import mean, pstdev
 
 from .transfer_criterion import (
     evaluate_transfer_decision_policy,
@@ -29,6 +30,10 @@ def adaptation_gain(run: dict, *, step: int, curve_key: str) -> float:
 
 def safe_ratio(numerator: float, denominator: float, eps: float = 1e-12) -> float:
     return float(numerator) / max(abs(float(denominator)), eps)
+
+
+def curve_std(curve: list[float]) -> float:
+    return pstdev(curve) if len(curve) > 1 else 0.0
 
 
 def build_support_contrast_rows(
@@ -86,6 +91,69 @@ def build_support_contrast_rows(
                 }
             )
     return rows
+
+
+def augment_support_diagnostic_scores(
+    rows: list[dict],
+    results: dict,
+    *,
+    structured_variant: str = "operator_diag_residual",
+    fallback_variant: str = "full_transition",
+    step: int = 8,
+) -> list[dict]:
+    indexed = run_index(results)
+    augmented: list[dict] = []
+    for row in rows:
+        fallback = indexed[(row["world"], int(row["seed"]), fallback_variant)]
+        structured = indexed[(row["world"], int(row["seed"]), structured_variant)]
+        fallback_adapt = fallback["adaptation"]
+        structured_adapt = structured["adaptation"]
+        fallback_curve = [float(value) for value in fallback_adapt["support_curve"]]
+        structured_curve = [float(value) for value in structured_adapt["support_curve"]]
+        fallback_zero = curve_value(fallback_curve, 0)
+        structured_zero = curve_value(structured_curve, 0)
+        fallback_final = float(fallback_adapt["support_final_mse"])
+        structured_final = float(structured_adapt["support_final_mse"])
+        fallback_gain = fallback_zero - curve_value(fallback_curve, step)
+        structured_gain = structured_zero - curve_value(structured_curve, step)
+        validation_gap = structured_final - fallback_final
+        validation_ratio = safe_ratio(structured_final, fallback_final)
+        router_margin = fallback_final - structured_final
+        router_scale = abs(fallback_final) + abs(structured_final)
+        fallback_std = curve_std(fallback_curve[: min(step + 1, len(fallback_curve))])
+        structured_std = curve_std(structured_curve[: min(step + 1, len(structured_curve))])
+        fallback_entropy = math.log(max(fallback_final, 1e-12)) + math.log(max(fallback_std, 1e-12))
+        structured_entropy = math.log(max(structured_final, 1e-12)) + math.log(max(structured_std, 1e-12))
+        updated = dict(row)
+        updated.update(
+            {
+                "score_validation_structured": structured_final,
+                "score_validation_fallback": fallback_final,
+                "score_validation_gap": validation_gap,
+                "score_validation_ratio": validation_ratio,
+                "score_zero_support_gap": structured_zero - fallback_zero,
+                "score_router_margin": router_margin,
+                "score_router_abs_margin": abs(router_margin),
+                "score_router_confidence": safe_ratio(router_margin, router_scale),
+                "score_fallback_gain_delta_8": fallback_gain,
+                "score_fallback_gain_ratio_8": safe_ratio(fallback_gain, fallback_zero - fallback_final),
+                "score_fallback_support_slope_1": fallback_zero - curve_value(fallback_curve, 1),
+                "score_structured_support_slope_1": structured_zero - curve_value(structured_curve, 1),
+                "score_uncertainty_structured_curve_std": structured_std,
+                "score_uncertainty_fallback_curve_std": fallback_std,
+                "score_uncertainty_gap": structured_std - fallback_std,
+                "score_entropy_structured_proxy": structured_entropy,
+                "score_entropy_fallback_proxy": fallback_entropy,
+                "score_entropy_margin": fallback_entropy - structured_entropy,
+                "score_interaction_support": float(structured["interaction_norm_support"]),
+                "score_interaction_train": float(structured["interaction_norm_train"]),
+                "score_interaction_support_gap": float(structured["interaction_norm_support"])
+                - float(structured["interaction_norm_train"]),
+                "score_alpha_metadata": float(row["alpha"]),
+            }
+        )
+        augmented.append(updated)
+    return augmented
 
 
 def evaluate_support_contrast_transfer(

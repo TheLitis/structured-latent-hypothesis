@@ -2,6 +2,7 @@ import unittest
 
 from structured_latent_hypothesis.support_contrast import (
     add_rank_features,
+    augment_support_diagnostic_scores,
     build_support_contrast_rows,
     cross_validate_rank_calibrated_transfer,
     curve_value,
@@ -46,6 +47,43 @@ class SupportContrastTests(unittest.TestCase):
         self.assertGreater(rows[0]["score_gain_ratio_1"], 1.0)
         self.assertTrue(rows[0]["task_safe"])
         self.assertTrue(rows[0]["task_budget"])
+
+    def test_augment_support_diagnostic_scores_adds_baseline_features(self) -> None:
+        results = {
+            "worlds": ["context_coupled_0.20"],
+            "seeds": [3],
+            "runs": [
+                run("context_coupled_0.20", 3, "full_transition", [1.0, 0.8, 0.7], 0.20, 6)
+                | {
+                    "interaction_norm_support": 0.0,
+                    "interaction_norm_train": 0.0,
+                    "adaptation": {
+                        "support_curve": [1.0, 0.8, 0.7],
+                        "support_residual_curve": [0.0, 0.0, 0.0],
+                        "best_query_mse": 0.20,
+                        "steps_to_target": 6,
+                        "support_final_mse": 0.7,
+                    },
+                },
+                run("context_coupled_0.20", 3, "operator_diag_residual", [1.0, 0.7, 0.6], 0.18, 4)
+                | {
+                    "interaction_norm_support": 0.2,
+                    "interaction_norm_train": 0.1,
+                    "adaptation": {
+                        "support_curve": [1.0, 0.7, 0.6],
+                        "support_residual_curve": [0.0, 0.0, 0.0],
+                        "best_query_mse": 0.18,
+                        "steps_to_target": 4,
+                        "support_final_mse": 0.6,
+                    },
+                },
+            ],
+        }
+        rows = build_support_contrast_rows(results, regret_tolerance=0.0, budget=8)
+        augmented = augment_support_diagnostic_scores(rows, results)
+        self.assertAlmostEqual(augmented[0]["score_validation_gap"], -0.1)
+        self.assertGreater(augmented[0]["score_router_margin"], 0.0)
+        self.assertAlmostEqual(augmented[0]["score_interaction_support_gap"], 0.1)
 
     def test_rank_features_use_reference_distribution(self) -> None:
         rows = [{"score": 10.0}, {"score": 20.0}]
